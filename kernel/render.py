@@ -1,17 +1,18 @@
-"""Rendering helpers shared by apps: fonts, text measuring, scroll math.
+"""Rendering helpers shared by apps: fonts and text measuring.
 
-At 64px panel height a crisp bitmap/pixel font reads best. Drop a `.ttf`/`.otf`
-(e.g. Pixel Operator, Cozette, Press Start 2P) into `fonts/` and it's picked up
-automatically. If no bundled font is found we fall back to a system monospace, then
-to Pillow's built-in font, so the sign always renders something legible.
+Font priority for legible text on a 64px panel:
+1. A bundled **bitmap** font (`.bdf`) — rendered 1:1 with NO antialiasing, exactly
+   how a real LED sign looks. This is the crispest option at tiny sizes. BDFs are
+   compiled once to Pillow's binary font format and cached under `fonts/.cache/`.
+2. A bundled scalable font (`.ttf`/`.otf`).
+3. A system monospace, then Pillow's built-in font — so the sign always renders.
 """
 
 import glob
 import os
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import BdfFontFile, ImageFont
 
-# System monospace fonts to try when no font is bundled in fonts/.
 _SYSTEM_FONTS = [
     "/System/Library/Fonts/Menlo.ttc",  # macOS
     "/System/Library/Fonts/SFNSMono.ttf",  # macOS
@@ -21,29 +22,62 @@ _SYSTEM_FONTS = [
 
 
 class FontBook:
-    """Loads and caches fonts by pixel size from `font_dir`, then the system."""
+    """Loads and caches fonts from `font_dir` (bitmap + scalable), then the system."""
 
     def __init__(self, font_dir):
         self.font_dir = font_dir
-        self._bundled = sorted(
+        self._ttf = sorted(
             glob.glob(os.path.join(font_dir, "*.ttf"))
             + glob.glob(os.path.join(font_dir, "*.otf"))
         )
-        self._cache = {}
+        self._bdf = sorted(glob.glob(os.path.join(font_dir, "*.bdf")))
+        self._ttf_cache = {}
+        self._bitmap_cache = {}
+
+    def bitmap(self, name=None):
+        """Return a crisp fixed-size bitmap font (or None if no `.bdf` is bundled).
+
+        `name` selects a specific file (e.g. "4x6.bdf"); otherwise the first BDF by
+        name is used (the smallest, given the "WxH" naming convention).
+        """
+        key = name or "__default__"
+        if key not in self._bitmap_cache:
+            self._bitmap_cache[key] = self._load_bitmap(name)
+        return self._bitmap_cache[key]
 
     def get(self, size):
-        if size not in self._cache:
-            self._cache[size] = self._load(size)
-        return self._cache[size]
+        """Return a scalable font at `size` (bundled TTF, system, or built-in)."""
+        if size not in self._ttf_cache:
+            self._ttf_cache[size] = self._load_ttf(size)
+        return self._ttf_cache[size]
 
-    def _load(self, size):
-        for path in self._bundled + _SYSTEM_FONTS:
+    # ------------------------------------------------------------------
+    def _load_bitmap(self, name):
+        if not self._bdf:
+            return None
+        if name:
+            path = next((p for p in self._bdf if os.path.basename(p) == name), None)
+        else:
+            path = self._bdf[0]
+        if not path:
+            return None
+
+        cache_dir = os.path.join(self.font_dir, ".cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        prefix = os.path.join(cache_dir, os.path.splitext(os.path.basename(path))[0])
+        pil_path = prefix + ".pil"
+        if not os.path.exists(pil_path):
+            with open(path, "rb") as handle:
+                BdfFontFile.BdfFontFile(handle).save(prefix)
+        return ImageFont.load(pil_path)
+
+    def _load_ttf(self, size):
+        for path in self._ttf + _SYSTEM_FONTS:
             if os.path.exists(path):
                 try:
                     return ImageFont.truetype(path, size)
                 except OSError:
                     continue
-        # Last resort: Pillow's built-in font (scalable on Pillow >= 10.1).
         try:
             return ImageFont.load_default(size=size)
         except TypeError:  # older Pillow: fixed-size default
@@ -55,24 +89,7 @@ def text_width(font, text):
     return int(font.getlength(text))
 
 
-def render_lines(lines, font_book, width, palette, line_gap=1, pad=1):
-    """Render a vertical stack of styled lines into a tall RGB image.
-
-    `lines` is a list of (text, kind) where `kind` keys into `palette` for color
-    and font size. Returns an image `width` wide and as tall as the content needs
-    — ready to be scrolled through a smaller viewport.
-    """
-    laid_out, y = [], pad
-    for text, kind in lines:
-        style = palette[kind]
-        font = font_book.get(style["size"])
-        ascent, descent = font.getmetrics()
-        laid_out.append((text, font, style["color"], y))
-        y += ascent + descent + line_gap
-    total_height = max(y - line_gap + pad, 1)
-
-    image = Image.new("RGB", (width, total_height), "black")
-    draw = ImageDraw.Draw(image)
-    for text, font, color, top in laid_out:
-        draw.text((pad, top), text, font=font, fill=color)
-    return image
+def glyph_height(font, sample="Aghpqy1|"):
+    """True ink height (px) of a font, spanning ascenders and descenders."""
+    box = font.getbbox(sample)
+    return box[3] - box[1], box[1]  # (height, top_bearing)

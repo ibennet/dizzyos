@@ -19,11 +19,13 @@ from the site's `/izzys-cafe.json` feed. Weather and train-times apps are next.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Live preview in a browser window (opens http://localhost:8888):
-python run.py
+# Easiest: the preview script (creates the venv on first run):
+./preview.sh          # live browser preview at http://localhost:8888
+./preview.sh png      # render one static frame to a PNG and open it
 
-# Or render frames to PNGs without any display (great for quick checks / CI):
-python run.py --dump-frames frames/ --frames 12 --duration 8
+# Or drive run.py directly:
+python run.py                                   # live browser preview
+python run.py --dump-frames frames/ --frames 1  # static PNG, no display
 ```
 
 The `--led-*` flags mirror `rpi-rgb-led-matrix`, e.g.
