@@ -1,0 +1,25 @@
+# dizzyos runtime configuration.
+# CLI flags (--led-rows, --led-chain, ...) override anything here at launch.
+
+matrix:
+  rows: 64
+  cols: 64
+  chain: 2                       # two 64x64 panels chained -> a 128x64 canvas
+  parallel: 1
+  brightness: 70
+  # --- Pi-only (ignored by the Mac emulator) ---
+  hardware_mapping: adafruit-hat-pwm   # use "adafruit-hat" if you didn't solder the PWM jumper
+  gpio_slowdown: 4                     # 4 is a safe default on a Pi 4
+  # pixel_mapper_config: "Rotate:90"   # uncomment to stack the panels as a tall 64x128
+
+launcher:
+  rotation:                      # apps cycle in this order
+    - cafe_menu
+  default_dwell: 20              # seconds per app when an app doesn't set its own
+  target_fps: 24
+  transition: crossfade
+  transition_ms: 600
+
+apps:
+  cafe_menu: {}                  # defaults come from apps/cafe_menu/manifest.yaml;
+                                 # override menu_url / scroll_speed / dwell here if needed

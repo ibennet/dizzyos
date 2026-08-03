@@ -1,0 +1,11 @@
+name: Cafe Menu
+description: Izzy's Cafe drink & food menu, synced from izzybennett.com
+# Seconds this app stays on screen per rotation.
+dwell: 30
+# Re-fetch the menu feed this often (seconds).
+refresh_interval: 300
+# Structured menu feed published by the website (src/pages/izzys-cafe.json.ts).
+# Can be overridden per-environment in config.yaml or with `--menu-url`.
+menu_url: "https://izzybennett.com/izzys-cafe.json"
+# Vertical scroll speed of the menu body, pixels per second.
+scroll_speed: 14
