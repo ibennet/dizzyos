@@ -22,9 +22,9 @@ COLORS = {
 FALLBACK_MENU = {
     "title": "Izzy's Cafe",
     "sections": [
-        {"heading": "Drinks", "items": ["Latte", "Matcha Latte", "Americano", "Pourover"]},
+        {"heading": "Drinks", "items": ["Coffee", "Matcha"]},
         {"heading": "Milks", "items": ["Whole", "Oat"]},
-        {"heading": "Additions", "items": ["Cardamom syrup", "Cardamom cold foam", "Ice"]},
+        {"heading": "Syrups", "items": ["Cardamom", "Earl Gray"]},
         {"heading": "Food", "items": ["Cardamom cookie", "Ricotta toast"]},
     ],
 }
@@ -69,30 +69,52 @@ class CafeMenuApp(App):
         return left, right
 
     def _choose_font(self, title, left, right, width, height):
-        """Prefer the bundled bitmap font; else auto-size a scalable font to fit."""
+        """Pick the largest bundled bitmap font that fits; else auto-size a TTF."""
         fonts = self.services.fonts
         rows = max(len(left), len(right), 1)
 
-        bitmap = fonts.bitmap(self.config.get("font"))
-        if bitmap is not None:
-            gh, top = glyph_height(bitmap)
-            return bitmap, gh + 1, gh, top
+        explicit = self.config.get("font")
+        bitmaps = [fonts.bitmap(explicit)] if explicit else fonts.bitmaps()
+        bitmaps = [font for font in bitmaps if font is not None]
+        for font in bitmaps:  # largest-first
+            fit = self._fits(font, title, left, right, rows, width, height)
+            if fit:
+                return fit
+        if bitmaps:  # none fit cleanly — use the smallest, content may clip
+            font = bitmaps[-1]
+            gh, top = glyph_height(font)
+            return font, gh + 1, gh, top
 
-        col_w = (width - 3) // 2  # equal columns for the scalable fallback
+        # No bitmap fonts bundled: auto-size a scalable font (equal columns).
+        col_w = (width - 3) // 2
         for size in range(11, 4, -1):
             font = fonts.get(size)
             gh, top = glyph_height(font)
-            row_h = gh + 1
-            if (gh + 2) + rows * row_h > height:
+            if (gh + 2) + rows * (gh + 1) > height:
                 continue
             if font.getlength(title) > width:
                 continue
             if any(font.getlength(text) > col_w for text, _ in left + right):
                 continue
-            return font, row_h, gh, top
+            return font, gh + 1, gh, top
         font = fonts.get(5)
         gh, top = glyph_height(font)
         return font, gh + 1, gh, top
+
+    @staticmethod
+    def _fits(font, title, left, right, rows, width, height):
+        """Return (font, row_h, title_h, top) if everything fits, else None."""
+        gh, top = glyph_height(font)
+        row_h = gh + 1
+        if (gh + 2) + rows * row_h > height:
+            return None
+        if font.getlength(title) > width:
+            return None
+        left_w = max((font.getlength(text) for text, _ in left), default=0)
+        right_w = max((font.getlength(text) for text, _ in right), default=0)
+        if left_w + right_w + 3 > width:
+            return None
+        return font, row_h, gh, top
 
     def render(self, t):  # t unused: the layout is static
         if self._menu is None:

@@ -45,6 +45,21 @@ class FontBook:
             self._bitmap_cache[key] = self._load_bitmap(name)
         return self._bitmap_cache[key]
 
+    def bitmaps(self):
+        """All bundled bitmap fonts, largest glyph-height first.
+
+        Lets an app pick the largest pixel font that fits its content — a shorter
+        menu automatically renders in bigger, more legible type.
+        """
+        loaded = []
+        for path in self._bdf:
+            font = self.bitmap(os.path.basename(path))
+            if font is not None:
+                box = font.getbbox("Aghpqy1|")
+                loaded.append((box[3] - box[1], font))
+        loaded.sort(key=lambda item: item[0], reverse=True)
+        return [font for _, font in loaded]
+
     def get(self, size):
         """Return a scalable font at `size` (bundled TTF, system, or built-in)."""
         if size not in self._ttf_cache:
