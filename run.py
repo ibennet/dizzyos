@@ -64,10 +64,7 @@ def dump_frames(cfg, args, log):
     if not name:
         sys.exit("nothing to render: no --app given and rotation is empty")
 
-    app_cfg = dict(cfg.get("apps", {}).get(name, {}))
-    if args.menu_url:
-        app_cfg["menu_url"] = args.menu_url
-    app = load_app(name, app_cfg)
+    app = load_app(name, cfg.get("apps", {}).get(name, {}))
     app.on_start(services)
     app.refresh()
 
@@ -102,6 +99,8 @@ def main():
 
     cfg = load_config(args.config)
     apply_overrides(cfg, args)
+    if args.menu_url:  # applies to both the live launcher and --dump-frames
+        cfg.setdefault("apps", {}).setdefault("cafe_menu", {})["menu_url"] = args.menu_url
 
     def log(message):
         print(message, file=sys.stderr)
