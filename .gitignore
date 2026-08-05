@@ -6,3 +6,6 @@ frames/
 *.png
 !fonts/*.png
 .DS_Store
+fonts/.cache/
+*.pil
+*.pbm

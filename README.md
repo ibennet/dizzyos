@@ -19,11 +19,13 @@ from the site's `/izzys-cafe.json` feed. Weather and train-times apps are next.
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# Live preview in a browser window (opens http://localhost:8888):
-python run.py
+# Easiest: the preview script (creates the venv on first run):
+./preview.sh          # live browser preview at http://localhost:8888
+./preview.sh png      # render one static frame to a PNG and open it
 
-# Or render frames to PNGs without any display (great for quick checks / CI):
-python run.py --dump-frames frames/ --frames 12 --duration 8
+# Or drive run.py directly:
+python run.py                                   # live browser preview
+python run.py --dump-frames frames/ --frames 1  # static PNG, no display
 ```
 
 The `--led-*` flags mirror `rpi-rgb-led-matrix`, e.g.
@@ -31,6 +33,10 @@ The `--led-*` flags mirror `rpi-rgb-led-matrix`, e.g.
 `config.yaml`. Tune the emulated look (pixel size/shape) in `emulator_config.json`.
 
 ## Architecture
+
+Apps live in this repo (a monorepo) behind a clean kernel/app seam. For *why* — and
+when to revisit it — see [ADR 0001](docs/adr/0001-monorepo-with-clean-seam.md); the
+seam rules for app authors live in `apps/__init__.py`.
 
 ```
 run.py            entrypoint + CLI (--led-* flags, --dump-frames)
