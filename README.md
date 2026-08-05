@@ -19,7 +19,7 @@ from the site's `/izzys-cafe.json` feed. Weather and train-times apps are next.
 python3 -m venv .venv && source .venv/bin/activate
 make install                 # or: pip install -r requirements.txt
 
-# Live preview in a browser window (opens http://localhost:8888):
+# Live preview — serves at http://localhost:8888 (open it in your browser):
 make dev                     # full app rotation
 make dev APP=weather         # just one app — handy while building it
 

@@ -19,6 +19,6 @@
     "image_border": true,
     "debug_text": false,
     "image_format": "JPEG",
-    "open_immediately": true
+    "open_immediately": false
   }
 }

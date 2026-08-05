@@ -17,7 +17,7 @@ import yaml
 
 from kernel import display as display_mod
 from kernel.data import DataService
-from kernel.loader import load_app
+from kernel.loader import APPS_DIR, load_app
 from kernel.render import FontBook
 from kernel.services import Services
 
@@ -51,31 +51,44 @@ def build_services(cfg, log):
     return Services(width=width, height=height, data=DataService(log=log), fonts=fonts, log=log)
 
 
+def available_apps():
+    """Names of apps discoverable on disk (a dir under apps/ with an app.py)."""
+    return sorted(
+        name for name in os.listdir(APPS_DIR)
+        if os.path.isfile(os.path.join(APPS_DIR, name, "app.py"))
+    )
+
+
 def load_named_app(cfg, name):
-    """Load one app by name, merging its config.yaml overrides over its manifest defaults."""
+    """Load one app by name, merging its config.yaml overrides over its manifest defaults.
+
+    Exits with a clear message (not a traceback) when `name` isn't a real app — e.g. a
+    typo in `--app` or a bad entry in the rotation.
+    """
+    if not os.path.isfile(os.path.join(APPS_DIR, name, "app.py")):
+        sys.exit(f"no such app '{name}'. available: {', '.join(available_apps()) or '(none)'}")
     return load_app(name, cfg.get("apps", {}).get(name, {}))
 
 
-def rotation_apps(cfg):
-    names = cfg.get("launcher", {}).get("rotation", [])
-    return [load_named_app(cfg, name) for name in names]
+def selected_names(cfg, args):
+    """App names to run: just `--app` if given (dev preview), else the config rotation."""
+    if args.app:
+        return [args.app]
+    return cfg.get("launcher", {}).get("rotation", [])
 
 
 def select_apps(cfg, args):
-    """Apps to run live: just `--app` if given (dev preview), else the full rotation."""
-    if args.app:
-        return [load_named_app(cfg, args.app)]
-    return rotation_apps(cfg)
+    """Load the apps to run live: a single `--app`, or the full rotation."""
+    return [load_named_app(cfg, name) for name in selected_names(cfg, args)]
 
 
 def dump_frames(cfg, args, log):
     services = build_services(cfg, log)
-    names = cfg.get("launcher", {}).get("rotation", [])
-    name = args.app or (names[0] if names else None)
-    if not name:
+    names = selected_names(cfg, args)
+    if not names:
         sys.exit("nothing to render: no --app given and rotation is empty")
 
-    app = load_named_app(cfg, name)
+    app = load_named_app(cfg, names[0])
     app.on_start(services)
     app.refresh()
 
@@ -124,8 +137,8 @@ def main():
 
     from kernel.launcher import Launcher  # deferred: pulls in the matrix library
 
+    apps = select_apps(cfg, args)  # validate/load apps before spinning up the matrix
     matrix = display_mod.create_matrix(cfg)
-    apps = select_apps(cfg, args)
     log(f"dizzyos up: {display_mod.canvas_size(cfg)} canvas, apps={[a.name for a in apps]}")
     try:
         Launcher(matrix, apps, cfg, build_services(cfg, log)).run()

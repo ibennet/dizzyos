@@ -1,5 +1,5 @@
 # Dev commands for dizzyos — run `make help`. Uses the local venv if present, else python3.
-# The emulator opens at http://localhost:8888 and is tuned in emulator_config.json to
+# The emulator serves at http://localhost:8888 and is tuned in emulator_config.json to
 # simulate two chained Adafruit 64x64 3mm-pitch (P3) panels as a 128x64 canvas.
 
 PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
