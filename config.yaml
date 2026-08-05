@@ -25,4 +25,4 @@ apps:
   cafe_menu: {}                  # defaults come from apps/cafe_menu/manifest.yaml;
                                  # override menu_url / scroll_speed / dwell here if needed
   weather: {}                    # defaults come from apps/weather/manifest.yaml;
-                                 # override latitude / longitude / location_label here
+                                 # set `zipcode` (or latitude/longitude) + location_label here

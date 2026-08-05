@@ -49,12 +49,14 @@ class WeatherApp(App):
     def on_start(self, services):
         super().on_start(services)
         self._wx = None
+        self._label = self.config.get("location_label") or ""
 
     def refresh(self):
+        lat, lon, self._label = self._resolve_location()
         base = self.config.get("api_base", "https://api.open-meteo.com/v1/forecast")
         params = {
-            "latitude": self.config.get("latitude", 40.7128),
-            "longitude": self.config.get("longitude", -74.0060),
+            "latitude": lat,
+            "longitude": lon,
             "current": "temperature_2m,weather_code,is_day",
             "daily": "temperature_2m_max,temperature_2m_min",
             "temperature_unit": "fahrenheit",
@@ -64,6 +66,32 @@ class WeatherApp(App):
         url = f"{base}?{urlencode(params)}"
         ttl = self.refresh_interval or 600
         self._wx = self.services.data.get_json(url, ttl=ttl, fallback=FALLBACK)
+
+    def _resolve_location(self):
+        """Return (lat, lon, label). Geocode `zipcode` via zippopotam.us when set,
+        else use the configured lat/lon. Never raises — degrades to the fallback
+        coordinates on any lookup failure so the sign always renders."""
+        lat = self.config.get("latitude", 40.7128)
+        lon = self.config.get("longitude", -74.0060)
+        label = self.config.get("location_label") or ""
+        zipc = str(self.config.get("zipcode") or "").strip()
+        if not zipc:
+            return lat, lon, label
+
+        country = str(self.config.get("country") or "us").strip() or "us"
+        base = self.config.get("geocode_base", "https://api.zippopotam.us")
+        # ZIP -> coordinates is static, so cache it hard; {} fallback degrades to lat/lon.
+        geo = self.services.data.get_json(f"{base}/{country}/{zipc}", ttl=2592000, fallback={})
+        places = geo.get("places") if isinstance(geo, dict) else None
+        if places:
+            place = places[0]
+            try:
+                lat, lon = float(place["latitude"]), float(place["longitude"])
+            except (KeyError, TypeError, ValueError):
+                return lat, lon, label  # keep configured coords on malformed data
+            if not label:
+                label = place.get("place name", "").strip() or zipc
+        return lat, lon, label
 
     # --- data extraction (pure, defensive against missing fields) ----------
     def _reading(self):
@@ -109,7 +137,7 @@ class WeatherApp(App):
         pf.draw_text(draw, time_x, 2, time_str, PALETTE["time"]["color"], scale=ts)
 
         ls = PALETTE["label"]["scale"]
-        label = _ellipsize(pf, str(self.config.get("location_label", "")), ls, time_x - 4)
+        label = _ellipsize(pf, self._label, ls, time_x - 4)
         if label:
             pf.draw_text(draw, 2, 2, label, PALETTE["label"]["color"], scale=ls)
         draw.line([(0, 12), (width, 12)], fill=DIVIDER)
