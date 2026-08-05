@@ -10,7 +10,6 @@ Each glyph is 7 rows of 5 characters: '#' is lit, anything else is off.
 """
 
 GLYPH_W = 5
-GLYPH_H = 7
 
 # fmt: off
 _GLYPHS = {
@@ -528,15 +527,12 @@ def draw_text(draw, x, y, text, color, scale=1, tracking=1):
     last glyph (no trailing gap)."""
     cx = x
     for ch in text:
-        glyph = _GLYPHS.get(ch) or _GLYPHS["?"]
+        glyph = _GLYPHS.get(ch, _GLYPHS["?"])
         for ry, row in enumerate(glyph):
             for rx, cell in enumerate(row):
                 if cell == "#":
                     px, py = cx + rx * scale, y + ry * scale
-                    if scale == 1:
-                        draw.point((px, py), fill=color)
-                    else:
-                        draw.rectangle([px, py, px + scale - 1, py + scale - 1], fill=color)
+                    draw.rectangle([px, py, px + scale - 1, py + scale - 1], fill=color)
         cx += (GLYPH_W + tracking) * scale
     return cx - tracking * scale
 
