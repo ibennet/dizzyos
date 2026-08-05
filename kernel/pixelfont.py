@@ -1,10 +1,11 @@
 """A hand-designed 5x7 bitmap font for the LED sign.
 
 System TrueType fonts anti-alias at small sizes, which smears into mud on a
-low-resolution LED panel. This font is defined as explicit on/off pixel grids
-instead, so every lit pixel maps to exactly one crisp LED. Glyphs are 5 wide by
-7 tall; `draw_text` blits them at an integer `scale` (1 = 5x7, 4 = 20x28...) so
-the same face stays sharp from a header label up to a big temperature readout.
+low-resolution LED panel; the bundled `.bdf` bitmap fonts (see FontBook) are crisp
+but fixed-size. This font is defined as explicit on/off pixel grids and blitted at
+an integer `scale` (1 = 5x7, 4 = 20x28...), so a single face stays sharp from a
+small header label up to a big temperature readout. Apps reach it through
+`services.fonts.pixel()` rather than importing this module directly.
 
 Each glyph is 7 rows of 5 characters: '#' is lit, anything else is off.
 """
@@ -521,24 +522,27 @@ _GLYPHS = {
 # fmt: on
 
 
-def draw_text(draw, x, y, text, color, scale=1, tracking=1):
-    """Blit `text` at top-left (x, y). `scale` enlarges each pixel to a scale×scale
-    block; `tracking` is the inter-glyph gap in font pixels. Returns the x past the
-    last glyph (no trailing gap)."""
-    cx = x
-    for ch in text:
-        glyph = _GLYPHS.get(ch, _GLYPHS["?"])
-        for ry, row in enumerate(glyph):
-            for rx, cell in enumerate(row):
-                if cell == "#":
-                    px, py = cx + rx * scale, y + ry * scale
-                    draw.rectangle([px, py, px + scale - 1, py + scale - 1], fill=color)
-        cx += (GLYPH_W + tracking) * scale
-    return cx - tracking * scale
+class PixelFont:
+    """The built-in scalable bitmap font. Stateless — obtain the shared instance via
+    `FontBook.pixel()` and call `draw_text`/`measure`."""
 
+    def draw_text(self, draw, x, y, text, color, scale=1, tracking=1):
+        """Blit `text` at top-left (x, y). `scale` enlarges each pixel to a scale×scale
+        block; `tracking` is the inter-glyph gap in font pixels. Returns the x past the
+        last glyph (no trailing gap)."""
+        cx = x
+        for ch in text:
+            glyph = _GLYPHS.get(ch, _GLYPHS["?"])
+            for ry, row in enumerate(glyph):
+                for rx, cell in enumerate(row):
+                    if cell == "#":
+                        px, py = cx + rx * scale, y + ry * scale
+                        draw.rectangle([px, py, px + scale - 1, py + scale - 1], fill=color)
+            cx += (GLYPH_W + tracking) * scale
+        return cx - tracking * scale
 
-def measure(text, scale=1, tracking=1):
-    """Pixel width `draw_text` would occupy for `text` (no trailing gap)."""
-    if not text:
-        return 0
-    return (len(text) * (GLYPH_W + tracking) - tracking) * scale
+    def measure(self, text, scale=1, tracking=1):
+        """Pixel width `draw_text` would occupy for `text` (no trailing gap)."""
+        if not text:
+            return 0
+        return (len(text) * (GLYPH_W + tracking) - tracking) * scale

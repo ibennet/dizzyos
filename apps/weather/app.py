@@ -3,7 +3,7 @@
 Pulls a forecast from the free, keyless Open-Meteo API and renders a single static
 frame: a procedurally-drawn weather icon (sun/cloud/rain/snow/storm...) and the
 location on the left, and the current temperature, the day's high/low, and the local
-time on the right. Text uses a hand-designed bitmap font (apps/weather/pixelfont.py)
+time on the right. Text uses the kernel's hand-designed bitmap font (services.fonts.pixel())
 so it stays crisp on the LED panel instead of smearing like an anti-aliased TTF.
 Falls back to a bundled snapshot if the API is unreachable, so the sign is never blank.
 """
@@ -15,7 +15,6 @@ from PIL import ImageDraw
 
 from kernel.app import App
 
-from apps.weather import pixelfont as pf
 from apps.weather.icons import category, draw_icon
 
 # scale = bitmap-font pixel scale (1 = 5x7, 3 = 15x21...); color = RGB.
@@ -37,11 +36,11 @@ FALLBACK = {
 }
 
 
-def _ellipsize(text, scale, max_w):
+def _ellipsize(font, text, scale, max_w):
     """Trim `text` (appending an ellipsis) until it fits within `max_w` pixels."""
-    if not text or pf.measure(text, scale) <= max_w:
+    if not text or font.measure(text, scale) <= max_w:
         return text
-    while text and pf.measure(text + "…", scale) > max_w:
+    while text and font.measure(text + "…", scale) > max_w:
         text = text[:-1]
     return text + "…" if text else ""
 
@@ -95,6 +94,7 @@ class WeatherApp(App):
         # Data is primed by the launcher's off-loop refresh(); until then _reading()
         # falls back to FALLBACK, so we never fetch on the render thread.
         width = self.services.width
+        pf = self.services.fonts.pixel()
         reading = self._reading()
 
         image = self.blank()
@@ -109,7 +109,7 @@ class WeatherApp(App):
         pf.draw_text(draw, time_x, 2, time_str, PALETTE["time"]["color"], scale=ts)
 
         ls = PALETTE["label"]["scale"]
-        label = _ellipsize(str(self.config.get("location_label", "")), ls, time_x - 4)
+        label = _ellipsize(pf, str(self.config.get("location_label", "")), ls, time_x - 4)
         if label:
             pf.draw_text(draw, 2, 2, label, PALETTE["label"]["color"], scale=ls)
         draw.line([(0, 12), (width, 12)], fill=DIVIDER)
