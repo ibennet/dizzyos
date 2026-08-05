@@ -17,20 +17,32 @@ from the site's `/izzys-cafe.json` feed. Weather and train-times apps are next.
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+make install                 # or: pip install -r requirements.txt
 
 # Easiest: the preview script (creates the venv on first run):
-./preview.sh          # live browser preview at http://localhost:8888
-./preview.sh png      # render one static frame to a PNG and open it
+./preview.sh                 # live browser preview at http://localhost:8888
+./preview.sh png             # render one static frame to a PNG and open it
 
-# Or drive run.py directly:
-python run.py                                   # live browser preview
-python run.py --dump-frames frames/ --frames 1  # static PNG, no display
+# Or use the make targets — live preview serves at http://localhost:8888:
+make dev                     # full app rotation
+make dev APP=weather         # just one app — handy while building it
+make frames APP=weather      # render frames to PNGs, headless -> frames/weather/
 ```
 
+`make dev`/`make frames` are thin wrappers over `python run.py` (use it directly if
+you prefer: `python run.py --app weather`, `python run.py --dump-frames frames/`).
+
 The `--led-*` flags mirror `rpi-rgb-led-matrix`, e.g.
-`python run.py --led-rows=64 --led-cols=64 --led-chain=2`. Defaults live in
-`config.yaml`. Tune the emulated look (pixel size/shape) in `emulator_config.json`.
+`python run.py --led-rows=64 --led-cols=64 --led-chain=2`. Panel geometry defaults
+live in `config.yaml`.
+
+### Emulator look
+
+`emulator_config.json` tunes how the browser emulator renders. It ships configured to
+**simulate two chained Adafruit 64×64 3mm-pitch (P3) panels** — a 128×64 canvas drawn
+with the `real` pixel style plus a subtle glow, so previews resemble the physical sign
+lit up. Panel geometry (rows/cols/chain) lives in `config.yaml`; this file only
+controls appearance (pixel size/style/glow).
 
 ## Architecture
 
