@@ -34,6 +34,10 @@ The `--led-*` flags mirror `rpi-rgb-led-matrix`, e.g.
 
 ## Architecture
 
+Apps live in this repo (a monorepo) behind a clean kernel/app seam. For *why* — and
+when to revisit it — see [ADR 0001](docs/adr/0001-monorepo-with-clean-seam.md); the
+seam rules for app authors live in `apps/__init__.py`.
+
 ```
 run.py            entrypoint + CLI (--led-* flags, --dump-frames)
 config.yaml       matrix geometry, app rotation, dwell/transition
