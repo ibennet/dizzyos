@@ -3,8 +3,9 @@
 Pulls a forecast from the free, keyless Open-Meteo API and renders a single static
 frame: a procedurally-drawn weather icon (sun/cloud/rain/snow/storm...) and the
 location on the left, and the current temperature, the day's high/low, and the local
-time on the right. Falls back to a bundled snapshot if the API is unreachable, so the
-sign is never blank.
+time on the right. Text uses a hand-designed bitmap font (apps/weather/pixelfont.py)
+so it stays crisp on the LED panel instead of smearing like an anti-aliased TTF.
+Falls back to a bundled snapshot if the API is unreachable, so the sign is never blank.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -13,17 +14,17 @@ from urllib.parse import urlencode
 from PIL import ImageDraw
 
 from kernel.app import App
-from kernel.render import text_width
 
+from apps.weather import pixelfont as pf
 from apps.weather.icons import category, draw_icon
 
-# size = font pixel size; color = RGB.
+# scale = bitmap-font pixel scale (1 = 5x7, 3 = 15x21...); color = RGB.
 PALETTE = {
-    "temp": {"size": 30, "color": (245, 245, 245)},  # big current temperature
-    "high": {"size": 11, "color": (255, 150, 90)},   # warm — daily high
-    "low": {"size": 11, "color": (120, 200, 255)},   # cool — daily low
-    "label": {"size": 10, "color": (170, 170, 170)}, # place name in the header
-    "time": {"size": 10, "color": (255, 196, 84)},   # amber clock in the header
+    "temp": {"scale": 4, "color": (245, 245, 245)},  # big current temp (shrinks to fit)
+    "high": {"scale": 1, "color": (255, 150, 90)},   # warm — daily high
+    "low": {"scale": 1, "color": (120, 200, 255)},   # cool — daily low
+    "label": {"scale": 1, "color": (170, 170, 170)}, # place name in the header
+    "time": {"scale": 1, "color": (255, 196, 84)},   # amber clock in the header
 }
 DIVIDER = (70, 70, 70)
 
@@ -36,11 +37,11 @@ FALLBACK = {
 }
 
 
-def _ellipsize(text, font, max_w):
+def _ellipsize(text, scale, max_w):
     """Trim `text` (appending an ellipsis) until it fits within `max_w` pixels."""
-    if not text or text_width(font, text) <= max_w:
+    if not text or pf.measure(text, scale) <= max_w:
         return text
-    while text and text_width(font, text + "…") > max_w:
+    while text and pf.measure(text + "…", scale) > max_w:
         text = text[:-1]
     return text + "…" if text else ""
 
@@ -103,37 +104,38 @@ class WeatherApp(App):
         # clipped to the clock's left edge so a long place name can't run into it.
         now = self._local_now(reading["offset"])  # recomputed each frame → ticks live
         time_str = now.strftime("%I:%M %p").lstrip("0")
-        time_font = self.services.fonts.get(PALETTE["time"]["size"])
-        time_x = width - text_width(time_font, time_str) - 2
-        draw.text((time_x, 0), time_str, font=time_font, fill=PALETTE["time"]["color"])
+        ts = PALETTE["time"]["scale"]
+        time_x = width - pf.measure(time_str, ts) - 2
+        pf.draw_text(draw, time_x, 2, time_str, PALETTE["time"]["color"], scale=ts)
 
-        label_font = self.services.fonts.get(PALETTE["label"]["size"])
-        label = _ellipsize(str(self.config.get("location_label", "")), label_font, time_x - 4)
+        ls = PALETTE["label"]["scale"]
+        label = _ellipsize(str(self.config.get("location_label", "")), ls, time_x - 4)
         if label:
-            draw.text((2, 0), label, font=label_font, fill=PALETTE["label"]["color"])
+            pf.draw_text(draw, 2, 2, label, PALETTE["label"]["color"], scale=ls)
         draw.line([(0, 12), (width, 12)], fill=DIVIDER)
 
         # Body left: the weather icon.
         draw_icon(draw, 26, 37, category(reading["code"]), reading["is_day"])
 
-        # Body right: big current temperature.
+        # Body right: big current temperature. Shrink a size if 3 digits won't fit.
         rx = 52
-        temp_font = self.services.fonts.get(PALETTE["temp"]["size"])
         temp_str = f"{reading['temp']}°" if reading["temp"] is not None else "--°"
-        draw.text((rx, 16), temp_str, font=temp_font, fill=PALETTE["temp"]["color"])
+        cs = PALETTE["temp"]["scale"]
+        while cs > 1 and rx + pf.measure(temp_str, cs) > width - 2:
+            cs -= 1
+        pf.draw_text(draw, rx, 16, temp_str, PALETTE["temp"]["color"], scale=cs)
 
         # Body right: the day's high / low, as two color-coded segments. Drop the
         # degree glyphs if the pretty form would overflow (3-digit or sub-zero temps).
-        hl_y = 49
-        high_font = self.services.fonts.get(PALETTE["high"]["size"])
-        low_font = self.services.fonts.get(PALETTE["low"]["size"])
+        hl_y = 50
+        hs = PALETTE["high"]["scale"]
         for deg in ("°", ""):
             high_str = f"H {reading['high']}{deg}" if reading["high"] is not None else "H --"
             low_str = f"L {reading['low']}{deg}" if reading["low"] is not None else "L --"
-            gap = text_width(high_font, high_str) + 4
-            if rx + gap + text_width(low_font, low_str) <= width - 2:
+            gap = pf.measure(high_str, hs) + 4
+            if rx + gap + pf.measure(low_str, hs) <= width - 2:
                 break
-        draw.text((rx, hl_y), high_str, font=high_font, fill=PALETTE["high"]["color"])
-        draw.text((rx + gap, hl_y), low_str, font=low_font, fill=PALETTE["low"]["color"])
+        pf.draw_text(draw, rx, hl_y, high_str, PALETTE["high"]["color"], scale=hs)
+        pf.draw_text(draw, rx + gap, hl_y, low_str, PALETTE["low"]["color"], scale=hs)
 
         return image
