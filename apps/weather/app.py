@@ -36,6 +36,15 @@ FALLBACK = {
 }
 
 
+def _ellipsize(text, font, max_w):
+    """Trim `text` (appending an ellipsis) until it fits within `max_w` pixels."""
+    if not text or text_width(font, text) <= max_w:
+        return text
+    while text and text_width(font, text + "…") > max_w:
+        text = text[:-1]
+    return text + "…" if text else ""
+
+
 class WeatherApp(App):
     def on_start(self, services):
         super().on_start(services)
@@ -90,16 +99,18 @@ class WeatherApp(App):
         image = self.blank()
         draw = ImageDraw.Draw(image)
 
-        # Header row: location on the left, local time on the right.
-        label_font = self.services.fonts.get(PALETTE["label"]["size"])
-        label = str(self.config.get("location_label", ""))
-        if label:
-            draw.text((2, 0), label, font=label_font, fill=PALETTE["label"]["color"])
+        # Header row: local time on the right, location on the left — the label is
+        # clipped to the clock's left edge so a long place name can't run into it.
         now = self._local_now(reading["offset"])  # recomputed each frame → ticks live
         time_str = now.strftime("%I:%M %p").lstrip("0")
         time_font = self.services.fonts.get(PALETTE["time"]["size"])
-        draw.text((width - text_width(time_font, time_str) - 2, 0), time_str,
-                  font=time_font, fill=PALETTE["time"]["color"])
+        time_x = width - text_width(time_font, time_str) - 2
+        draw.text((time_x, 0), time_str, font=time_font, fill=PALETTE["time"]["color"])
+
+        label_font = self.services.fonts.get(PALETTE["label"]["size"])
+        label = _ellipsize(str(self.config.get("location_label", "")), label_font, time_x - 4)
+        if label:
+            draw.text((2, 0), label, font=label_font, fill=PALETTE["label"]["color"])
         draw.line([(0, 12), (width, 12)], fill=DIVIDER)
 
         # Body left: the weather icon.
@@ -111,14 +122,18 @@ class WeatherApp(App):
         temp_str = f"{reading['temp']}°" if reading["temp"] is not None else "--°"
         draw.text((rx, 16), temp_str, font=temp_font, fill=PALETTE["temp"]["color"])
 
-        # Body right: the day's high / low, as two color-coded segments.
+        # Body right: the day's high / low, as two color-coded segments. Drop the
+        # degree glyphs if the pretty form would overflow (3-digit or sub-zero temps).
         hl_y = 49
         high_font = self.services.fonts.get(PALETTE["high"]["size"])
         low_font = self.services.fonts.get(PALETTE["low"]["size"])
-        high_str = f"H {reading['high']}°" if reading["high"] is not None else "H --"
-        low_str = f"L {reading['low']}°" if reading["low"] is not None else "L --"
+        for deg in ("°", ""):
+            high_str = f"H {reading['high']}{deg}" if reading["high"] is not None else "H --"
+            low_str = f"L {reading['low']}{deg}" if reading["low"] is not None else "L --"
+            gap = text_width(high_font, high_str) + 4
+            if rx + gap + text_width(low_font, low_str) <= width - 2:
+                break
         draw.text((rx, hl_y), high_str, font=high_font, fill=PALETTE["high"]["color"])
-        gap = text_width(high_font, high_str) + 4
         draw.text((rx + gap, hl_y), low_str, font=low_font, fill=PALETTE["low"]["color"])
 
         return image

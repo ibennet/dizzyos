@@ -7,7 +7,7 @@ refresh_interval: 600
 # Location to forecast. Defaults to New York City — override per-environment in config.yaml.
 latitude: 40.7128
 longitude: -74.0060
-# Short place name shown beneath the icon.
+# Short place name shown in the header (top-left). Long names are clipped to fit.
 location_label: "New York"
 # Open-Meteo forecast endpoint. The full request URL (lat/lon + fields) is assembled in code.
 api_base: "https://api.open-meteo.com/v1/forecast"
