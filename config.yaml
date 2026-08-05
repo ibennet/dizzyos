@@ -26,3 +26,4 @@ apps:
                                  # override menu_url / scroll_speed / dwell here if needed
   weather:                       # defaults come from apps/weather/manifest.yaml;
     zipcode: "10022"             # set `zipcode` (or latitude/longitude) + location_label here
+    location_label: "New York"   # explicit label wins over the ZIP's auto-derived town
