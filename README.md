@@ -19,12 +19,14 @@ from the site's `/izzys-cafe.json` feed. Weather and train-times apps are next.
 python3 -m venv .venv && source .venv/bin/activate
 make install                 # or: pip install -r requirements.txt
 
-# Live preview — serves at http://localhost:8888 (open it in your browser):
+# Easiest: the preview script (creates the venv on first run):
+./preview.sh                 # live browser preview at http://localhost:8888
+./preview.sh png             # render one static frame to a PNG and open it
+
+# Or use the make targets — live preview serves at http://localhost:8888:
 make dev                     # full app rotation
 make dev APP=weather         # just one app — handy while building it
-
-# Render frames to PNGs without any display (great for quick checks / CI):
-make frames APP=weather      # -> frames/weather/frame_*.png
+make frames APP=weather      # render frames to PNGs, headless -> frames/weather/
 ```
 
 `make dev`/`make frames` are thin wrappers over `python run.py` (use it directly if
@@ -43,6 +45,10 @@ lit up. Panel geometry (rows/cols/chain) lives in `config.yaml`; this file only
 controls appearance (pixel size/style/glow).
 
 ## Architecture
+
+Apps live in this repo (a monorepo) behind a clean kernel/app seam. For *why* — and
+when to revisit it — see [ADR 0001](docs/adr/0001-monorepo-with-clean-seam.md); the
+seam rules for app authors live in `apps/__init__.py`.
 
 ```
 run.py            entrypoint + CLI (--led-* flags, --dump-frames)
