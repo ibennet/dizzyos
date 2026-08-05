@@ -57,6 +57,14 @@ def rotation_apps(cfg):
     return [load_app(name, apps_cfg.get(name, {})) for name in names]
 
 
+def select_apps(cfg, args):
+    """Apps to run live: just `--app` if given (dev preview), else the full rotation."""
+    if args.app:
+        apps_cfg = cfg.get("apps", {})
+        return [load_app(args.app, apps_cfg.get(args.app, {}))]
+    return rotation_apps(cfg)
+
+
 def dump_frames(cfg, args, log):
     services = build_services(cfg, log)
     names = cfg.get("launcher", {}).get("rotation", [])
@@ -91,7 +99,9 @@ def main():
     # Headless render mode.
     parser.add_argument("--dump-frames", metavar="DIR",
                         help="render frames to PNGs instead of driving a matrix")
-    parser.add_argument("--app", help="app to render in --dump-frames mode (default: first in rotation)")
+    parser.add_argument("--app", help="run/render a single app instead of the full rotation "
+                                      "(great for dev preview); default: the config rotation, "
+                                      "or its first app in --dump-frames mode")
     parser.add_argument("--frames", type=int, default=12, help="frame count for --dump-frames")
     parser.add_argument("--duration", type=float, default=8.0, help="seconds of animation to span")
     parser.add_argument("--menu-url", help="override the cafe_menu feed URL/path")
@@ -112,7 +122,7 @@ def main():
     from kernel.launcher import Launcher  # deferred: pulls in the matrix library
 
     matrix = display_mod.create_matrix(cfg)
-    apps = rotation_apps(cfg)
+    apps = select_apps(cfg, args)
     log(f"dizzyos up: {display_mod.canvas_size(cfg)} canvas, apps={[a.name for a in apps]}")
     try:
         Launcher(matrix, apps, cfg, build_services(cfg, log)).run()

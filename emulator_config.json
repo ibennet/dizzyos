@@ -1,14 +1,24 @@
 {
+  "_comment": "Dev emulator profile. Simulates two chained Adafruit 64x64 HUB75 panels at 3mm pitch (P3) as a single 128x64 canvas. The 'real' pixel style plus glow approximates individually-lit LEDs so on-screen previews match the physical sign. Panel geometry (rows/cols/chain/parallel) lives in config.yaml under `matrix:`; this file only controls how the emulator *looks*.",
   "pixel_outline": 0,
   "pixel_size": 12,
-  "pixel_style": "circle",
+  "pixel_style": "real",
+  "pixel_glow": 6,
   "display_adapter": "browser",
+  "allow_adapter_fallback": true,
+  "icon_path": null,
+  "emulator_title": "dizzyos — 2x Adafruit 64x64 P3",
   "suppress_font_warnings": true,
+  "log_level": "info",
   "browser": {
+    "_comment": "Browser adapter serves a live preview at http://localhost:<port>.",
     "port": 8888,
     "target_fps": 24,
     "fps_display": false,
     "quality": 80,
-    "image_border": true
+    "image_border": true,
+    "debug_text": false,
+    "image_format": "JPEG",
+    "open_immediately": true
   }
 }
