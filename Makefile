@@ -1,17 +1,11 @@
-# dizzyos dev commands. Runs against the local venv if present, else python3.
-#
-#   make dev              # live browser emulator, full app rotation
-#   make dev APP=weather  # live browser emulator, just one app (dev preview)
-#   make frames APP=weather   # render PNG frames headlessly (no display)
-#   make install          # install Python dependencies
-#
-# The emulator opens at http://localhost:8888 and is tuned in emulator_config.json
-# to simulate two chained Adafruit 64x64 3mm-pitch (P3) panels as a 128x64 canvas.
+# Dev commands for dizzyos — run `make help`. Uses the local venv if present, else python3.
+# The emulator opens at http://localhost:8888 and is tuned in emulator_config.json to
+# simulate two chained Adafruit 64x64 3mm-pitch (P3) panels as a 128x64 canvas.
 
 PYTHON ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
 .DEFAULT_GOAL := help
-.PHONY: help dev run frames install
+.PHONY: help dev frames install
 
 help:
 	@echo "dizzyos dev commands:"
@@ -23,13 +17,7 @@ help:
 
 # Live preview in the browser emulator.
 dev:
-ifeq ($(strip $(APP)),)
-	$(PYTHON) run.py
-else
-	$(PYTHON) run.py --app $(APP)
-endif
-
-run: dev
+	$(PYTHON) run.py $(if $(strip $(APP)),--app $(APP))
 
 # Headless frame dump for quick checks / CI. APP is required.
 frames:

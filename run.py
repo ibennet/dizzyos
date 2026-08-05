@@ -51,17 +51,20 @@ def build_services(cfg, log):
     return Services(width=width, height=height, data=DataService(log=log), fonts=fonts, log=log)
 
 
+def load_named_app(cfg, name):
+    """Load one app by name, merging its config.yaml overrides over its manifest defaults."""
+    return load_app(name, cfg.get("apps", {}).get(name, {}))
+
+
 def rotation_apps(cfg):
     names = cfg.get("launcher", {}).get("rotation", [])
-    apps_cfg = cfg.get("apps", {})
-    return [load_app(name, apps_cfg.get(name, {})) for name in names]
+    return [load_named_app(cfg, name) for name in names]
 
 
 def select_apps(cfg, args):
     """Apps to run live: just `--app` if given (dev preview), else the full rotation."""
     if args.app:
-        apps_cfg = cfg.get("apps", {})
-        return [load_app(args.app, apps_cfg.get(args.app, {}))]
+        return [load_named_app(cfg, args.app)]
     return rotation_apps(cfg)
 
 
@@ -72,7 +75,7 @@ def dump_frames(cfg, args, log):
     if not name:
         sys.exit("nothing to render: no --app given and rotation is empty")
 
-    app = load_app(name, cfg.get("apps", {}).get(name, {}))
+    app = load_named_app(cfg, name)
     app.on_start(services)
     app.refresh()
 
