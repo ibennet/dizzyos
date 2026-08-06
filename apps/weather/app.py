@@ -26,7 +26,6 @@ PALETTE = {
     "time": {"scale": 1, "color": (255, 196, 84)},   # amber clock in the header
     "rain": {"scale": 1, "color": (120, 190, 255)},  # upcoming-rain alert (bottom)
 }
-DIVIDER = (70, 70, 70)
 
 # Shown if the API can't be reached on first paint. Mild, clear, offset 0 (UTC) so
 # the clock still renders offline.
@@ -163,10 +162,9 @@ class WeatherApp(App):
         label = _ellipsize(pf, self._label, ls, time_x - 4)
         if label:
             pf.draw_text(draw, 2, 2, label, PALETTE["label"]["color"], scale=ls)
-        draw.line([(0, 12), (width, 12)], fill=DIVIDER)
 
         # Body left: the weather icon.
-        draw_icon(draw, 26, 37, category(reading["code"]), reading["is_day"])
+        draw_icon(draw, 26, 33, category(reading["code"]), reading["is_day"])
 
         # Body right: big current temperature. Shrink a size if 3 digits won't fit.
         rx = 52
@@ -174,15 +172,14 @@ class WeatherApp(App):
         cs = PALETTE["temp"]["scale"]
         while cs > 1 and rx + pf.measure(temp_str, cs) > width - 2:
             cs -= 1
-        pf.draw_text(draw, rx, 16, temp_str, PALETTE["temp"]["color"], scale=cs)
+        pf.draw_text(draw, rx, 13, temp_str, PALETTE["temp"]["color"], scale=cs)
 
-        # Next likely rain within 24h (only when the chance meets the threshold). When
-        # shown it takes the bottom row, so the high/low nudges up to make room.
+        # Next likely rain within 24h — only when the chance meets the threshold.
         rain_at = self._next_rain(now)
 
         # Body right: the day's high / low, as two color-coded segments. Drop the
         # degree glyphs if the pretty form would overflow (3-digit or sub-zero temps).
-        hl_y = 47 if rain_at else 50
+        hl_y = 46
         hs = PALETTE["high"]["scale"]
         for deg in ("°", ""):
             high_str = f"H {reading['high']}{deg}" if reading["high"] is not None else "H --"
@@ -194,7 +191,7 @@ class WeatherApp(App):
         pf.draw_text(draw, rx + gap, hl_y, low_str, PALETTE["low"]["color"], scale=hs)
 
         if rain_at:
-            pf.draw_text(draw, 2, 56, f"Rain at {rain_at}", PALETTE["rain"]["color"],
+            pf.draw_text(draw, 2, 57, f"Rain at {rain_at}", PALETTE["rain"]["color"],
                          scale=PALETTE["rain"]["scale"])
 
         return image
