@@ -121,8 +121,15 @@ class WeatherApp(App):
         (matches the API's local, tz-naive hourly timestamps under timezone=auto)."""
         return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).replace(tzinfo=None)
 
+    def _fmt_time(self, dt):
+        """Format a time per the `time_format` config: 24-hour ("HH:MM") when it
+        mentions 24, otherwise 12-hour ("H:MM AM/PM")."""
+        if "24" in str(self.config.get("time_format", "12h")):
+            return dt.strftime("%H:%M")
+        return dt.strftime("%I:%M %p").lstrip("0")
+
     def _next_rain(self, now):
-        """Local 'HH:MM' (24-hour) of the next hour within 24h whose precipitation
+        """Formatted local time of the next hour within 24h whose precipitation
         probability meets the threshold, or None if none does. `now` is naive local."""
         wx = self._wx or {}
         hourly = wx.get("hourly") or {}
@@ -138,7 +145,7 @@ class WeatherApp(App):
             except (ValueError, TypeError):
                 continue
             if now <= t <= horizon:
-                return t.strftime("%H:%M")
+                return self._fmt_time(t)
         return None
 
     # --- rendering ---------------------------------------------------------
@@ -155,7 +162,7 @@ class WeatherApp(App):
         # Header row: local time on the right, location on the left — the label is
         # clipped to the clock's left edge so a long place name can't run into it.
         now = self._local_now(reading["offset"])  # recomputed each frame → ticks live
-        time_str = now.strftime("%I:%M %p").lstrip("0")
+        time_str = self._fmt_time(now)
         ts = PALETTE["time"]["scale"]
         time_x = width - pf.measure(time_str, ts) - 2
         pf.draw_text(draw, time_x, 2, time_str, PALETTE["time"]["color"], scale=ts)

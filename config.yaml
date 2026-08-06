@@ -27,3 +27,4 @@ apps:
   weather:                       # defaults come from apps/weather/manifest.yaml;
     zipcode: "10022"             # set `zipcode` (or latitude/longitude) + location_label here
     location_label: "New York"   # explicit label wins over the ZIP's auto-derived town
+    time_format: "24h"           # 12h (3:17 PM) or 24h (15:17)

@@ -17,6 +17,8 @@ location_label: ""
 # Show "Rain at HH:MM" when the next hour's chance of rain (within 24h) is at least
 # this percent. Raise to make the alert less chatty; there's no alert below it.
 rain_probability_threshold: 30
+# Clock and rain-time format: "12h" (3:17 PM) or "24h" (15:17).
+time_format: "12h"
 # APIs (rarely need changing).
 api_base: "https://api.open-meteo.com/v1/forecast"
 geocode_base: "https://api.zippopotam.us"
