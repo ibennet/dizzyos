@@ -89,10 +89,10 @@ class WeatherApp(App):
             place = places[0]
             try:
                 lat, lon = float(place["latitude"]), float(place["longitude"])
+                if not label:
+                    label = place.get("place name", "").strip() or zipc
             except (KeyError, TypeError, ValueError):
-                return lat, lon, label  # keep configured coords on malformed data
-            if not label:
-                label = place.get("place name", "").strip() or zipc
+                pass  # keep the configured coords/label on malformed geocode data
         return lat, lon, label
 
     # --- data extraction (pure, defensive against missing fields) ----------
@@ -106,6 +106,7 @@ class WeatherApp(App):
         def rounded(value):
             return round(value) if isinstance(value, (int, float)) else None
 
+        now = self._local_now(wx.get("utc_offset_seconds", 0) or 0)
         return {
             "temp": rounded(current.get("temperature_2m")),
             "high": rounded(highs[0]) if highs else None,
@@ -113,7 +114,8 @@ class WeatherApp(App):
             "code": current.get("weather_code", 3),
             "is_day": current.get("is_day", 1),
             "humidity": rounded(current.get("relative_humidity_2m")),
-            "offset": wx.get("utc_offset_seconds", 0) or 0,
+            "now": now,  # naive local time, ticks each frame (recomputed here)
+            "rain_at": self._next_rain(now),  # datetime of next likely rain, or None
         }
 
     def _local_now(self, offset_seconds):
@@ -122,15 +124,15 @@ class WeatherApp(App):
         return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).replace(tzinfo=None)
 
     def _fmt_time(self, dt):
-        """Format a time per the `time_format` config: 24-hour ("HH:MM") when it
-        mentions 24, otherwise 12-hour ("H:MM AM/PM")."""
-        if "24" in str(self.config.get("time_format", "12h")):
+        """Format a time per the `time_format` config: 24-hour ("HH:MM") when set to
+        "24h", otherwise 12-hour ("H:MM AM/PM")."""
+        if str(self.config.get("time_format", "12h")).startswith("24"):
             return dt.strftime("%H:%M")
         return dt.strftime("%I:%M %p").lstrip("0")
 
     def _next_rain(self, now):
-        """Formatted local time of the next hour within 24h whose precipitation
-        probability meets the threshold, or None if none does. `now` is naive local."""
+        """Local `datetime` of the next hour within 24h whose precipitation probability
+        meets the threshold, or None if none does. `now` is naive local."""
         wx = self._wx or {}
         hourly = wx.get("hourly") or {}
         times = hourly.get("time") or []
@@ -145,7 +147,7 @@ class WeatherApp(App):
             except (ValueError, TypeError):
                 continue
             if now <= t <= horizon:
-                return self._fmt_time(t)
+                return t
         return None
 
     # --- rendering ---------------------------------------------------------
@@ -161,8 +163,7 @@ class WeatherApp(App):
 
         # Header row: local time on the right, location on the left — the label is
         # clipped to the clock's left edge so a long place name can't run into it.
-        now = self._local_now(reading["offset"])  # recomputed each frame → ticks live
-        time_str = self._fmt_time(now)
+        time_str = self._fmt_time(reading["now"])
         ts = PALETTE["time"]["scale"]
         time_x = width - pf.measure(time_str, ts) - 2
         pf.draw_text(draw, time_x, 2, time_str, PALETTE["time"]["color"], scale=ts)
@@ -183,9 +184,6 @@ class WeatherApp(App):
             cs -= 1
         pf.draw_text(draw, rx, 13, temp_str, PALETTE["temp"]["color"], scale=cs)
 
-        # Next likely rain within 24h — only when the chance meets the threshold.
-        rain_at = self._next_rain(now)
-
         # Body right: the day's high / low, as two color-coded segments. Drop the
         # degree glyphs if the pretty form would overflow (3-digit or sub-zero temps).
         hl_y = 46
@@ -200,11 +198,13 @@ class WeatherApp(App):
         pf.draw_text(draw, rx + gap, hl_y, low_str, PALETTE["low"]["color"], scale=hs)
 
         # Bottom row: the upcoming-rain alert if any, otherwise current humidity.
-        if rain_at:
-            pf.draw_text(draw, 2, 57, f"Rain at {rain_at}", PALETTE["rain"]["color"],
-                         scale=PALETTE["rain"]["scale"])
+        if reading["rain_at"]:
+            key, text = "rain", f"Rain at {self._fmt_time(reading['rain_at'])}"
         elif reading["humidity"] is not None:
-            pf.draw_text(draw, 2, 57, f"Humidity {reading['humidity']}%",
-                         PALETTE["humidity"]["color"], scale=PALETTE["humidity"]["scale"])
+            key, text = "humidity", f"Humidity {reading['humidity']}%"
+        else:
+            key = None
+        if key:
+            pf.draw_text(draw, 2, 57, text, PALETTE[key]["color"], scale=PALETTE[key]["scale"])
 
         return image
