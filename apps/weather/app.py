@@ -25,13 +25,14 @@ PALETTE = {
     "label": {"scale": 1, "color": (170, 170, 170)}, # place name in the header
     "time": {"scale": 1, "color": (255, 196, 84)},   # amber clock in the header
     "rain": {"scale": 1, "color": (120, 190, 255)},  # upcoming-rain alert (bottom)
+    "humidity": {"scale": 1, "color": (130, 200, 185)},  # humidity (bottom, when no rain)
 }
 
 # Shown if the API can't be reached on first paint. Mild, clear, offset 0 (UTC) so
 # the clock still renders offline.
 FALLBACK = {
     "utc_offset_seconds": 0,
-    "current": {"temperature_2m": 70, "weather_code": 1, "is_day": 1},
+    "current": {"temperature_2m": 70, "weather_code": 1, "is_day": 1, "relative_humidity_2m": 50},
     "daily": {"temperature_2m_max": [75], "temperature_2m_min": [60]},
 }
 
@@ -57,7 +58,7 @@ class WeatherApp(App):
         params = {
             "latitude": lat,
             "longitude": lon,
-            "current": "temperature_2m,weather_code,is_day",
+            "current": "temperature_2m,weather_code,is_day,relative_humidity_2m",
             "hourly": "precipitation_probability",
             "daily": "temperature_2m_max,temperature_2m_min",
             "temperature_unit": "fahrenheit",
@@ -111,6 +112,7 @@ class WeatherApp(App):
             "low": rounded(lows[0]) if lows else None,
             "code": current.get("weather_code", 3),
             "is_day": current.get("is_day", 1),
+            "humidity": rounded(current.get("relative_humidity_2m")),
             "offset": wx.get("utc_offset_seconds", 0) or 0,
         }
 
@@ -190,8 +192,12 @@ class WeatherApp(App):
         pf.draw_text(draw, rx, hl_y, high_str, PALETTE["high"]["color"], scale=hs)
         pf.draw_text(draw, rx + gap, hl_y, low_str, PALETTE["low"]["color"], scale=hs)
 
+        # Bottom row: the upcoming-rain alert if any, otherwise current humidity.
         if rain_at:
             pf.draw_text(draw, 2, 57, f"Rain at {rain_at}", PALETTE["rain"]["color"],
                          scale=PALETTE["rain"]["scale"])
+        elif reading["humidity"] is not None:
+            pf.draw_text(draw, 2, 57, f"Humidity {reading['humidity']}%",
+                         PALETTE["humidity"]["color"], scale=PALETTE["humidity"]["scale"])
 
         return image
