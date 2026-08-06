@@ -13,6 +13,8 @@ import os
 
 from PIL import BdfFontFile, ImageFont
 
+from kernel.pixelfont import PixelFont
+
 _SYSTEM_FONTS = [
     "/System/Library/Fonts/Menlo.ttc",  # macOS
     "/System/Library/Fonts/SFNSMono.ttf",  # macOS
@@ -33,6 +35,18 @@ class FontBook:
         self._bdf = sorted(glob.glob(os.path.join(font_dir, "*.bdf")))
         self._ttf_cache = {}
         self._bitmap_cache = {}
+        self._pixel = None
+
+    def pixel(self):
+        """Return the built-in hand-designed scalable bitmap font (a PixelFont).
+
+        Crispest option for tiny LED text, and — unlike the fixed-size `.bdf` faces —
+        it renders a single face at any integer scale (e.g. a small label and a big
+        temperature from the same glyphs). See kernel/pixelfont.py.
+        """
+        if self._pixel is None:
+            self._pixel = PixelFont()
+        return self._pixel
 
     def bitmap(self, name=None):
         """Return a crisp fixed-size bitmap font (or None if no `.bdf` is bundled).
