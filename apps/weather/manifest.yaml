@@ -14,6 +14,9 @@ latitude: 40.7128
 longitude: -74.0060
 # Header place name. Leave blank to auto-fill from the ZIP's town + state.
 location_label: ""
+# Show "Rain at HH:MM" when the next hour's chance of rain (within 24h) is at least
+# this percent. Raise to make the alert less chatty; there's no alert below it.
+rain_probability_threshold: 30
 # APIs (rarely need changing).
 api_base: "https://api.open-meteo.com/v1/forecast"
 geocode_base: "https://api.zippopotam.us"

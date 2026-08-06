@@ -24,6 +24,7 @@ PALETTE = {
     "low": {"scale": 1, "color": (120, 200, 255)},   # cool — daily low
     "label": {"scale": 1, "color": (170, 170, 170)}, # place name in the header
     "time": {"scale": 1, "color": (255, 196, 84)},   # amber clock in the header
+    "rain": {"scale": 1, "color": (120, 190, 255)},  # upcoming-rain alert (bottom)
 }
 DIVIDER = (70, 70, 70)
 
@@ -58,10 +59,11 @@ class WeatherApp(App):
             "latitude": lat,
             "longitude": lon,
             "current": "temperature_2m,weather_code,is_day",
+            "hourly": "precipitation_probability",
             "daily": "temperature_2m_max,temperature_2m_min",
             "temperature_unit": "fahrenheit",
             "timezone": "auto",
-            "forecast_days": 1,
+            "forecast_days": 2,  # 48h of hourly, so "next rain" is found even late in the day
         }
         url = f"{base}?{urlencode(params)}"
         ttl = self.refresh_interval or 600
@@ -114,8 +116,29 @@ class WeatherApp(App):
         }
 
     def _local_now(self, offset_seconds):
-        """Current wall-clock time in the location's timezone."""
-        return datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)
+        """Current wall-clock time in the location's timezone, as a naive datetime
+        (matches the API's local, tz-naive hourly timestamps under timezone=auto)."""
+        return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).replace(tzinfo=None)
+
+    def _next_rain(self, now):
+        """Local 'HH:MM' (24-hour) of the next hour within 24h whose precipitation
+        probability meets the threshold, or None if none does. `now` is naive local."""
+        wx = self._wx or {}
+        hourly = wx.get("hourly") or {}
+        times = hourly.get("time") or []
+        probs = hourly.get("precipitation_probability") or []
+        threshold = self.config.get("rain_probability_threshold", 30)
+        horizon = now + timedelta(hours=24)
+        for tstr, prob in zip(times, probs):
+            if not isinstance(prob, (int, float)) or prob < threshold:
+                continue
+            try:
+                t = datetime.fromisoformat(tstr)
+            except (ValueError, TypeError):
+                continue
+            if now <= t <= horizon:
+                return t.strftime("%H:%M")
+        return None
 
     # --- rendering ---------------------------------------------------------
     def render(self, t):
@@ -153,9 +176,13 @@ class WeatherApp(App):
             cs -= 1
         pf.draw_text(draw, rx, 16, temp_str, PALETTE["temp"]["color"], scale=cs)
 
+        # Next likely rain within 24h (only when the chance meets the threshold). When
+        # shown it takes the bottom row, so the high/low nudges up to make room.
+        rain_at = self._next_rain(now)
+
         # Body right: the day's high / low, as two color-coded segments. Drop the
         # degree glyphs if the pretty form would overflow (3-digit or sub-zero temps).
-        hl_y = 50
+        hl_y = 47 if rain_at else 50
         hs = PALETTE["high"]["scale"]
         for deg in ("°", ""):
             high_str = f"H {reading['high']}{deg}" if reading["high"] is not None else "H --"
@@ -165,5 +192,9 @@ class WeatherApp(App):
                 break
         pf.draw_text(draw, rx, hl_y, high_str, PALETTE["high"]["color"], scale=hs)
         pf.draw_text(draw, rx + gap, hl_y, low_str, PALETTE["low"]["color"], scale=hs)
+
+        if rain_at:
+            pf.draw_text(draw, 2, 56, f"Rain at {rain_at}", PALETTE["rain"]["color"],
+                         scale=PALETTE["rain"]["scale"])
 
         return image
