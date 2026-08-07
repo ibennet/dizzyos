@@ -8,8 +8,9 @@ Runs on two chained Adafruit 64×64 HUB75 panels (a 128×64 canvas) driven by a
 Raspberry Pi + Adafruit RGB Matrix Bonnet — and, thanks to a drop-in emulator, on your
 Mac with **zero code changes**.
 
-First app: **Cafe Menu**, which renders [Izzy's Cafe](https://izzybennett.com/izzys-cafe/)
-from the site's `/izzys-cafe.json` feed. Weather and train-times apps are next.
+Apps so far: **Cafe Menu**, which renders [Izzy's Cafe](https://izzybennett.com/izzys-cafe/)
+from the site's `/izzys-cafe.json` feed; **Weather**, current conditions from Open-Meteo;
+and **Subway**, live next-train times from the MTA's realtime feeds.
 
 ---
 
@@ -58,12 +59,14 @@ kernel/
   launcher.py     rotate apps, double-buffered frame loop, crossfade
   app.py          the App base class (the whole app contract)
   loader.py       discover + instantiate apps from apps/<name>/
-  data.py         cached, stale-on-error JSON fetching (http + file)
+  data.py         cached, stale-on-error fetching — JSON or bytes (http + file)
   render.py       font loading + text/scroll helpers
   services.py     the handle passed to each app
   input.py        (optional) Bonnet GPIO buttons -> next/prev app
 apps/
-  cafe_menu/      first app: the site menu, scrolling
+  cafe_menu/      the site menu, scrolling
+  weather/        current conditions + high/low, procedural weather icons
+  subway/         next trains per station, incl. a tiny GTFS-realtime reader
 fonts/            drop a .ttf/.otf here for crisp text
 ```
 
@@ -84,8 +87,9 @@ class MyApp(App):
 2. Add `weather` to `launcher.rotation` in `config.yaml`.
 
 That's it — the loader discovers it, the launcher rotates to it. Fetch data via
-`self.services.data.get_json(url, ttl=...)`; weather is easy with the free, keyless
-[Open-Meteo](https://open-meteo.com) API.
+`self.services.data.get_json(url, ttl=...)` — or `get_bytes(...)` for a binary feed,
+which is how the subway app reads the MTA's protobuf. Both cache with a TTL and keep
+showing the last good value if a fetch fails.
 
 ## Deploying to the Raspberry Pi
 
