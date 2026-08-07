@@ -167,18 +167,32 @@ def refresh_payload(release_dir):
 def main():
     install = "--install" in sys.argv
     force = "--force" in sys.argv
-    repo = conf()["REPO"]
+    values = conf()
+    repo = values["REPO"]
 
-    tag = latest_tag(repo)
-    if tag is None:
-        if not install:
-            log("no releases published yet; nothing to do")
-            return 0
-        # Bootstrap before the first release exists: track main directly.
-        log("no releases yet — installing from the main branch")
-        tag, ref = "main", "refs/heads/main"
+    if values.get("REF"):
+        # Dev pin: REF=<branch> in update.conf installs that branch instead
+        # of a release — the way to test unmerged work on real hardware
+        # (set at flash time via `flash.sh --ref`). Remove the line and
+        # re-run to return to release tracking. --force refetches the
+        # branch tip.
+        branch = values["REF"]
+        tag, ref = "pin-" + branch.replace("/", "-"), f"refs/heads/{branch}"
+        log(f"pinned to branch {branch} (REF in {CONF})")
+        pinned = os.path.join(RELEASES, tag)
+        if force and os.path.isdir(pinned):
+            shutil.rmtree(pinned)
     else:
-        ref = f"refs/tags/{tag}"
+        tag = latest_tag(repo)
+        if tag is None:
+            if not install:
+                log("no releases published yet; nothing to do")
+                return 0
+            # Bootstrap before the first release exists: track main directly.
+            log("no releases yet — installing from the main branch")
+            tag, ref = "main", "refs/heads/main"
+        else:
+            ref = f"refs/tags/{tag}"
 
     prev = current_tag()
     if tag == prev and not force:

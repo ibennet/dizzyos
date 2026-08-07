@@ -71,6 +71,11 @@ cp "$BOOT"/dizzyos/bootstrap.sh "$BOOT"/dizzyos/dizzyos-update /opt/dizzyos/payl
 cp "$BOOT"/dizzyos/*.service "$BOOT"/dizzyos/*.timer /opt/dizzyos/payload/
 chmod +x /opt/dizzyos/payload/bootstrap.sh /opt/dizzyos/payload/dizzyos-update
 echo 'REPO={{REPO}}' > /etc/dizzyos/update.conf
+# A branch pin (flash.sh --ref) makes the updater track that branch instead
+# of releases — dev/testing only; delete the REF line to return to releases.
+if [ -n '{{REF}}' ]; then
+  echo 'REF={{REF}}' >> /etc/dizzyos/update.conf
+fi
 
 cp /opt/dizzyos/payload/dizzyos-bootstrap.service /etc/systemd/system/
 ln -sf /etc/systemd/system/dizzyos-bootstrap.service \

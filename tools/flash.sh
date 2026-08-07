@@ -38,6 +38,8 @@ PI_PASS=""
 SSH_KEY_FILE=""
 IMAGE_FILE=""            # --image to skip the download and use a local .img/.img.xz
 REPO="${DIZZYOS_REPO:-ibennet/dizzyos}"
+REF=""                   # --ref <branch>: install that branch instead of the
+                         # latest release — for testing unmerged work on hardware
 
 usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
@@ -53,6 +55,7 @@ while [ $# -gt 0 ]; do
     --ssh-key)   SSH_KEY_FILE="$2"; shift 2 ;;
     --image)     IMAGE_FILE="$2"; shift 2 ;;
     --repo)      REPO="$2"; shift 2 ;;
+    --ref)       REF="$2"; shift 2 ;;
     -h|--help)   usage ;;
     *) echo "unknown option: $1" >&2; usage 1 ;;
   esac
@@ -211,6 +214,7 @@ sed -e "s|{{HOSTNAME}}|$PI_HOSTNAME|g" \
     -e "s|{{PSK}}|$(printf '%s' "$WIFI_PASS" | sed 's/[&|]/\\&/g')|g" \
     -e "s|{{SSH_PUBKEY}}|$SSH_PUBKEY|g" \
     -e "s|{{REPO}}|$REPO|g" \
+    -e "s|{{REF}}|$REF|g" \
     "$HERE/pi/firstrun.sh.tmpl" > "$BOOT/firstrun.sh"
 chmod +x "$BOOT/firstrun.sh"
 
