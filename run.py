@@ -135,13 +135,35 @@ def main():
         dump_frames(cfg, args, log)
         return
 
+    from kernel import __version__
     from kernel.launcher import Launcher  # deferred: pulls in the matrix library
+    from kernel.netmon import NetworkMonitor
+    from kernel.overlay import OverlayManager
+    from kernel.settings import SettingsServer
 
     apps = select_apps(cfg, args)  # validate/load apps before spinning up the matrix
     matrix = display_mod.create_matrix(cfg)
+    services = build_services(cfg, log)
+
+    # System layer: status overlays composed over every app frame, the
+    # network monitor that drives the no-wifi icon, and the PIN-gated LAN
+    # settings page. Each is opt-out via the `system:` block in config.yaml.
+    system = cfg.get("system") or {}
+    overlays = OverlayManager()
+    if system.get("network_monitor", True):
+        NetworkMonitor(overlays, log).start()
+    settings_cfg = system.get("settings") or {}
+    if settings_cfg.get("enabled", True):
+        try:
+            SettingsServer(args.config, overlays, services.fonts, log,
+                           version=__version__,
+                           port=settings_cfg.get("port", 8080)).start()
+        except OSError as exc:  # port taken (e.g. second dev instance) — not fatal
+            log(f"settings: disabled ({exc})")
+
     log(f"dizzyos up: {display_mod.canvas_size(cfg)} canvas, apps={[a.name for a in apps]}")
     try:
-        Launcher(matrix, apps, cfg, build_services(cfg, log)).run()
+        Launcher(matrix, apps, cfg, services, overlays=overlays).run()
     except KeyboardInterrupt:
         log("shutting down")
 

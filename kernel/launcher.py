@@ -7,6 +7,7 @@ animation. Data refreshes happen off the render loop on each app's declared inte
 Clock and sleep are injected so the loop is testable without real time.
 """
 
+import os
 import threading
 import time
 
@@ -74,14 +75,20 @@ def compose_transition(style, last, nxt, alpha):
 
 
 class Launcher:
-    def __init__(self, matrix, apps, cfg, services, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, matrix, apps, cfg, services, overlays=None,
+                 clock=time.monotonic, sleep=time.sleep):
         if not apps:
             raise ValueError("launcher needs at least one app")
         self.matrix = matrix
         self.apps = apps
         self.services = services
+        self.overlays = overlays
         self.clock = clock
         self.sleep = sleep
+        # Touched once per displayed frame when set (systemd points it at
+        # /run/dizzyos/heartbeat); dizzyos-update reads it as proof the new
+        # release actually renders — its post-deploy health check.
+        self.heartbeat_path = os.environ.get("DIZZYOS_HEARTBEAT")
 
         launcher_cfg = cfg.get("launcher", {})
         self.default_dwell = launcher_cfg.get("default_dwell", 20)
@@ -110,8 +117,9 @@ class Launcher:
             dwell = app.dwell or self.default_dwell
             frame_time = 1.0 / self.target_fps
             while (self.clock() - start) < dwell:
-                app.draw(canvas, self.clock() - start)
+                canvas.SetImage(self._compose(app.render(self.clock() - start)))
                 canvas = self.matrix.SwapOnVSync(canvas)
+                self._beat()
                 self.sleep(frame_time)
         finally:
             stop_refresh.set()
@@ -151,8 +159,28 @@ class Launcher:
         for i in range(1, steps + 1):
             alpha = i / steps
             nxt = incoming.render(alpha * duration).convert("RGB")
-            canvas.SetImage(compose_transition(self.transition, last, nxt, alpha))
+            frame = compose_transition(self.transition, last, nxt, alpha)
+            canvas.SetImage(self._compose(frame))
             canvas = self.matrix.SwapOnVSync(canvas)
+            self._beat()
             self.sleep(frame_time)
         incoming.on_stop()  # will be re-started by the next _run_app
         return canvas
+
+    # ------------------------------------------------------------------
+    def _compose(self, frame):
+        """A finished frame -> what actually hits the panels: RGB, with any
+        system overlays (no-wifi icon, setup PIN) drawn on top."""
+        frame = frame.convert("RGB")
+        if self.overlays:
+            frame = self.overlays.compose(frame)
+        return frame
+
+    def _beat(self):
+        """Prove liveness to dizzyos-update (see heartbeat_path above)."""
+        if self.heartbeat_path:
+            try:
+                with open(self.heartbeat_path, "w"):
+                    pass
+            except OSError:
+                self.heartbeat_path = None  # e.g. /run dir missing in dev

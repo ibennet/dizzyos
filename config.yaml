@@ -29,6 +29,12 @@ launcher:
   transition: slide
   transition_ms: 600
 
+system:
+  network_monitor: true          # red no-wifi icon (top-left) while offline
+  settings:
+    enabled: true                # LAN settings page: http://<sign>:8080 —
+    port: 8080                   # opening it puts a one-time PIN on the sign
+
 apps:
   cafe_menu: {}                  # defaults come from apps/cafe_menu/manifest.yaml;
                                  # override menu_url / scroll_speed / dwell here if needed

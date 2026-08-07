@@ -11,6 +11,7 @@ Each glyph is 7 rows of 5 characters: '#' is lit, anything else is off.
 """
 
 GLYPH_W = 5
+GLYPH_H = 7
 
 # fmt: off
 _GLYPHS = {
