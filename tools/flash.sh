@@ -206,6 +206,30 @@ CMDLINE="$(cat "$BOOT/cmdline.txt")"
 printf '%s isolcpus=3 cfg80211.ieee80211_regdom=%s systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target\n' \
   "$CMDLINE" "$WIFI_COUNTRY" > "$BOOT/cmdline.txt"
 
+# inject: cloud-init network config (Trixie images provision networking via
+# a cloud-init seed on this partition; the NM keyfile firstrun writes is
+# ignored by that regime, so WiFi must ALSO be declared here — learned the
+# hard way on a Pi 3B+ that booted, provisioned, and never joined WiFi).
+if [ -f "$BOOT/meta-data" ]; then
+  note "writing cloud-init network-config (Trixie+)"
+  yesc() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+  cat > "$BOOT/network-config" <<EOF
+# Written by dizzyos tools/flash.sh — netplan v2 consumed by cloud-init on
+# first boot. The wifi here is the same network firstrun.sh writes for
+# NetworkManager (that path covers pre-cloud-init images).
+network:
+  version: 2
+  wifis:
+    wlan0:
+      dhcp4: true
+      optional: true
+      regulatory-domain: $WIFI_COUNTRY
+      access-points:
+        "$(yesc "$SSID")":
+          password: "$(yesc "$WIFI_PASS")"
+EOF
+fi
+
 # inject: first-boot provisioning + the dizzyos payload
 note "writing firstrun.sh + payload"
 sed -e "s|{{HOSTNAME}}|$PI_HOSTNAME|g" \

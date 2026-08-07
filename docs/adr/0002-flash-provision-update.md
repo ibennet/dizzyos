@@ -39,8 +39,10 @@ its size to confirm.
 
 ### (b) Provisioning is headless; the settings page is LAN-only and authorized by the sign itself
 
-Credentials are baked at flash time — hostname, user, SSH public key, and a
-NetworkManager WiFi profile — so the first boot is unattended. To *change* things later
+Credentials are baked at flash time — hostname, user, SSH public key, and WiFi:
+a cloud-init `network-config` on the boot partition (the mechanism Raspberry Pi
+OS Trixie+ actually honors — hard-won knowledge) plus a NetworkManager keyfile
+for pre-cloud-init images — so the first boot is unattended. To *change* things later
 (rejoin WiFi, edit config) the sign serves a settings page on the LAN at
 `http://<hostname>.local:8080`.
 
