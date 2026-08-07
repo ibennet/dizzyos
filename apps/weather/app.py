@@ -15,7 +15,7 @@ from PIL import ImageDraw
 
 from kernel.app import App
 
-from apps.weather.icons import category, draw_icon
+from apps.weather.icons import PHASES, category, draw_icon
 
 # scale = bitmap-font pixel scale (1 = 5x7, 3 = 15x21...); color = RGB.
 PALETTE = {
@@ -173,8 +173,12 @@ class WeatherApp(App):
         if label:
             pf.draw_text(draw, 2, 2, label, PALETTE["label"]["color"], scale=ls)
 
-        # Body left: the weather icon.
-        draw_icon(draw, 26, 33, category(reading["code"]), reading["is_day"])
+        # Body left: the weather icon, cycling through its three animation states.
+        # `t` is seconds since this app gained focus, so the loop restarts cleanly
+        # each time the launcher rotates back around to us.
+        step = self.config.get("icon_frame_seconds", 0.5) or 0.5
+        phase = int(t / step) % PHASES
+        draw_icon(image, 26, 33, category(reading["code"]), reading["is_day"], phase)
 
         # Body right: big current temperature. Shrink a size if 3 digits won't fit.
         rx = 52

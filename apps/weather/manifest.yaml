@@ -19,6 +19,10 @@ location_label: ""
 rain_probability_threshold: 30
 # Clock and rain-time format: "12h" (3:17 PM) or "24h" (15:17).
 time_format: "12h"
+# Seconds each of the weather icon's three animation states is held, so a full cycle
+# is three times this. Lower is livelier — below ~0.2 the rain reads as flicker rather
+# than as falling — but on a sign glanced at rather than watched, slower is calmer.
+icon_frame_seconds: 0.8
 # APIs (rarely need changing).
 api_base: "https://api.open-meteo.com/v1/forecast"
 geocode_base: "https://api.zippopotam.us"
