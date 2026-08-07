@@ -90,7 +90,8 @@ SSH_PUBKEY="$(cat "$SSH_KEY_FILE")"
 if [ -z "$PI_PASS" ]; then
   read -r -s -p "login password for user '$PI_USER' (blank = random): " PI_PASS; echo
   if [ -z "$PI_PASS" ]; then
-    PI_PASS="$(LC_ALL=C tr -dc 'a-z0-9' < /dev/urandom | head -c 16)"
+    # No pipeline here: under pipefail, `urandom | head` dies of SIGPIPE.
+    PI_PASS="$(openssl rand -hex 8)"
     note "generated console password for '$PI_USER': $PI_PASS  (SSH uses your key)"
   fi
 fi
