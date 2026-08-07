@@ -1,0 +1,38 @@
+name: Subway
+description: Next trains at nearby stations, from the MTA's realtime GTFS feeds
+# Seconds this app stays on screen per rotation.
+dwell: 20
+# Re-poll the MTA feeds this often (seconds). The countdown keeps ticking between
+# refreshes — arrival times are absolute, not "minutes at fetch time".
+refresh_interval: 30
+# Stations to show, one column each. Three fit comfortably on a 128px canvas.
+# `id` is the GTFS *parent* station id (the feeds suffix it with N/S per direction);
+# `routes` filters to the lines that actually stop there. Look ids up in the MTA's
+# stops.txt: http://web.mta.info/developers/data/nyct/subway/google_transit.zip
+stops:
+  - { id: "F11", name: "Lex/53", routes: ["E", "M"] }
+  - { id: "630", name: "51 St", routes: ["6"] }        # the 4/5 run express past it
+  - { id: "R11", name: "Lex/59", routes: ["N", "R", "W"] }
+# Trains further out than this (minutes) are ignored.
+max_minutes: 60
+# Trains shown per direction, per stop.
+per_direction: 2
+# [R, G, B] fill of the direction strip down the left gutter — this is what marks
+# downtown vs uptown. The arrow is knocked out of it in black. Pick hues no MTA line
+# uses, so the bar can't be misread as line semantics (orange = B/D/F/M, and so on).
+gutter_downtown: [120, 190, 225]
+gutter_uptown: [240, 225, 200]
+# Accent [R, G, B] band behind the station names, and the color of that text.
+header_band: [78, 60, 145]
+header_color: [235, 235, 235]
+# Full-width wash behind each direction block — darker downtown, lighter uptown, and
+# neither pure black so the panel keeps a consistent floor. Use [0, 0, 0] for true
+# black. These need to be brighter than they look to register at all: the panel scales
+# them by `matrix.brightness` and lights them as separated LEDs, so under ~20 vanishes.
+band_downtown: [22, 22, 23]
+band_uptown: [48, 48, 50]
+# Keyless GTFS-realtime feeds (rarely needs changing).
+feed_base: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F"
+# Seconds a fetched feed is reused before re-fetching. Keep at or below
+# refresh_interval; on a failed fetch the last good feed keeps showing.
+feed_ttl: 30

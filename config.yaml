@@ -16,6 +16,7 @@ launcher:
   rotation:                      # apps cycle in this order
     - cafe_menu
     - weather
+    - subway
   default_dwell: 20              # seconds per app when an app doesn't set its own
   target_fps: 24
   transition: crossfade
@@ -28,3 +29,5 @@ apps:
     zipcode: "10022"             # set `zipcode` (or latitude/longitude) + location_label here
     location_label: "New York"   # explicit label wins over the ZIP's auto-derived town
     time_format: "24h"           # 12h (3:17 PM) or 24h (15:17)
+  subway: {}                     # defaults come from apps/subway/manifest.yaml;
+                                 # override `stops` here to follow different stations
