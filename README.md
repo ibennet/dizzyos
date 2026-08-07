@@ -56,7 +56,7 @@ run.py            entrypoint + CLI (--led-* flags, --dump-frames)
 config.yaml       matrix geometry, app rotation, dwell/transition
 kernel/
   display.py      Mac/Pi drop-in shim + matrix construction
-  launcher.py     rotate apps, double-buffered frame loop, crossfade
+  launcher.py     rotate apps, double-buffered frame loop, transitions
   app.py          the App base class (the whole app contract)
   loader.py       discover + instantiate apps from apps/<name>/
   data.py         cached, stale-on-error fetching — JSON or bytes (http + file)

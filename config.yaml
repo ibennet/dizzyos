@@ -19,7 +19,14 @@ launcher:
     - subway
   default_dwell: 20              # seconds per app when an app doesn't set its own
   target_fps: 24
-  transition: crossfade
+  # How one app hands off to the next. Options:
+  #   slide       iPad-style — both frames travel together, eased in and out
+  #   crossfade   the two frames dissolve through each other
+  #   wipe        incoming revealed left to right, neither frame moves
+  #   blank_wipe  outgoing wipes away to black, then incoming wipes in
+  #   cut_wipe    outgoing cuts to black, brief hold, then incoming wipes in
+  #   none        hard cut, no animation
+  transition: slide
   transition_ms: 600
 
 apps:
