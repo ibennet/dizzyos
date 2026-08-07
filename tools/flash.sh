@@ -70,6 +70,10 @@ command -v xz >/dev/null || die "xz is required to unpack the image: brew instal
 # ----------------------------------------------------------------------------
 # gather inputs up front so the flash itself runs unattended
 if [ -z "$SSID" ]; then
+  # SSIDs are case- and punctuation-sensitive, and a typo here costs a full
+  # boot-and-wonder-why cycle (ask us how we know). macOS redacts the
+  # current SSID from every CLI, so the best we can do is point at the UI.
+  echo "SSID is CASE-SENSITIVE — check the exact spelling in your WiFi menu bar."
   read -r -p "WiFi network name (SSID): " SSID
   [ -n "$SSID" ] || die "an SSID is required for a headless setup"
 fi
