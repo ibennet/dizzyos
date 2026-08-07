@@ -119,8 +119,14 @@ fi
 # device: pick + guardrails. A dd typo here overwrites a Mac disk, so we
 # refuse internal disks and make you retype what you're about to erase.
 if [ -z "$DEVICE" ]; then
-  note "external disks:"
-  diskutil list external physical
+  # A Mac's built-in SD slot reports as *internal* removable media, so
+  # `diskutil list external` would hide it — enumerate removable disks.
+  note "removable disks:"
+  for d in $(diskutil list -plist physical | plutil -extract WholeDisks json -o - - | tr -d '[]"' | tr ',' ' '); do
+    if [ "$(diskutil info -plist "$d" | plutil -extract RemovableMediaOrExternalDevice raw -o - - 2>/dev/null)" = "true" ]; then
+      diskutil list "$d"
+    fi
+  done
   read -r -p "device to flash (e.g. disk6): " DEVICE
 fi
 DEVICE="${DEVICE#/dev/}"
@@ -129,7 +135,13 @@ DEVICE="${DEVICE#/dev/}"
 PLIST="$(diskutil info -plist "$DEVICE")" || die "no such disk: $DEVICE"
 pval() { echo "$PLIST" | plutil -extract "$1" raw -o - - 2>/dev/null; }
 
-[ "$(pval Internal)" = "false" ] || die "refusing: $DEVICE reports as an INTERNAL disk"
+# Removable-or-external is the predicate that admits SD cards in both the
+# built-in reader (which macOS calls Internal) and USB readers, while
+# refusing fixed disks. Belt and braces: never the disk backing "/".
+[ "$(pval RemovableMediaOrExternalDevice)" = "true" ] || \
+  die "refusing: $DEVICE is not removable media / an external device"
+BOOT_DISK="$(diskutil info -plist / | plutil -extract ParentWholeDisk raw -o - -)"
+[ "$DEVICE" != "$BOOT_DISK" ] || die "refusing: $DEVICE is the boot disk"
 [ "$(pval VirtualOrPhysical)" != "Virtual" ] || die "refusing: $DEVICE is a virtual disk"
 SIZE_BYTES="$(pval TotalSize)"
 SIZE_GB=$(( (SIZE_BYTES + 500000000) / 1000000000 ))
