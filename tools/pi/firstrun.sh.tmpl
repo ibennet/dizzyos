@@ -1,0 +1,86 @@
+#!/bin/bash
+# dizzyos first-boot provisioning. Template — tools/flash.sh fills the
+# {{PLACEHOLDERS}} and drops the result on the boot partition; the kernel
+# command line runs it once (systemd.run, before normal boot), it configures
+# the system, erases its own secrets, and reboots into a normal boot.
+#
+# Runs as root with the rootfs mounted rw but almost no services up — so
+# everything here is plain file writes, no systemctl start / dbus.
+
+set -e
+exec > /boot/firmware/firstrun.log 2>&1
+echo "dizzyos firstrun: $(date)"
+
+BOOT=/boot/firmware
+
+# --- hostname ---------------------------------------------------------------
+echo "{{HOSTNAME}}" > /etc/hostname
+sed -i "s/127\.0\.1\.1.*/127.0.1.1\t{{HOSTNAME}}/" /etc/hosts
+
+# --- user + ssh -------------------------------------------------------------
+# userconf-pi is the supported "create/rename the first user" path on
+# Raspberry Pi OS; fall back to a plain useradd on images without it.
+if [ -x /usr/lib/userconf-pi/userconf ]; then
+  /usr/lib/userconf-pi/userconf '{{USERNAME}}' '{{PASS_HASH}}'
+else
+  id '{{USERNAME}}' >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo '{{USERNAME}}'
+  echo '{{USERNAME}}:{{PASS_HASH}}' | chpasswd -e
+fi
+
+USER_HOME="$(getent passwd '{{USERNAME}}' | cut -d: -f6)"
+install -d -m 700 -o '{{USERNAME}}' -g '{{USERNAME}}' "$USER_HOME/.ssh"
+echo '{{SSH_PUBKEY}}' > "$USER_HOME/.ssh/authorized_keys"
+chown '{{USERNAME}}:{{USERNAME}}' "$USER_HOME/.ssh/authorized_keys"
+chmod 600 "$USER_HOME/.ssh/authorized_keys"
+systemctl enable ssh
+
+# --- WiFi (NetworkManager — Bookworm no longer reads wpa_supplicant.conf) ---
+install -d -m 700 /etc/NetworkManager/system-connections
+cat > /etc/NetworkManager/system-connections/dizzyos-wifi.nmconnection <<'NMEOF'
+[connection]
+id=dizzyos-wifi
+type=wifi
+autoconnect=true
+
+[wifi]
+mode=infrastructure
+ssid={{SSID}}
+
+[wifi-security]
+key-mgmt=wpa-psk
+psk={{PSK}}
+
+[ipv4]
+method=auto
+
+[ipv6]
+method=auto
+NMEOF
+chmod 600 /etc/NetworkManager/system-connections/dizzyos-wifi.nmconnection
+
+# Ship images leave the radio soft-blocked until a country is set; the
+# regulatory domain came in on the kernel command line, so unblock here
+# (same trick rpi-imager's generated firstrun uses).
+for f in /var/lib/systemd/rfkill/*:wlan; do
+  [ -e "$f" ] && echo 0 > "$f"
+done
+
+# --- dizzyos payload + bootstrap-on-next-boot -------------------------------
+install -d /opt/dizzyos/payload /etc/dizzyos
+cp "$BOOT"/dizzyos/bootstrap.sh "$BOOT"/dizzyos/dizzyos-update /opt/dizzyos/payload/
+cp "$BOOT"/dizzyos/*.service "$BOOT"/dizzyos/*.timer /opt/dizzyos/payload/
+chmod +x /opt/dizzyos/payload/bootstrap.sh /opt/dizzyos/payload/dizzyos-update
+echo 'REPO={{REPO}}' > /etc/dizzyos/update.conf
+
+cp /opt/dizzyos/payload/dizzyos-bootstrap.service /etc/systemd/system/
+ln -sf /etc/systemd/system/dizzyos-bootstrap.service \
+  /etc/systemd/system/multi-user.target.wants/dizzyos-bootstrap.service
+
+# --- clean up after ourselves ----------------------------------------------
+# Strip the one-shot systemd.run hook from cmdline.txt (keep isolcpus etc.)
+# and remove the secrets this script carried.
+sed -i 's| systemd\.run=[^ ]*||; s| systemd\.run_success_action=[^ ]*||; s| systemd\.unit=kernel-command-line\.target||' "$BOOT/cmdline.txt"
+rm -rf "$BOOT/dizzyos" "$BOOT/firstrun.sh"
+
+echo "dizzyos firstrun: done"
+exit 0

@@ -1,0 +1,11 @@
+# One update check. Fired by dizzyos-update.timer; harmless to run by hand:
+#   sudo systemctl start dizzyos-update
+
+[Unit]
+Description=dizzyos self-update check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dizzyos/payload/dizzyos-update

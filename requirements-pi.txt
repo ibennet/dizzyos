@@ -1,0 +1,4 @@
+# Pi runtime dependencies (the matrix driver is compiled on-device by
+# tools/pi/bootstrap.sh; the emulator in requirements.txt is dev-only).
+Pillow>=10.1
+PyYAML>=6.0

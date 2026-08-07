@@ -1,0 +1,13 @@
+# Nightly update check with jitter (signs shouldn't stampede GitHub at the
+# same second), catching up after downtime.
+
+[Unit]
+Description=dizzyos nightly self-update
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

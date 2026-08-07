@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""dizzyos self-updater — stdlib only, runs on the Pi from a systemd timer.
+
+Releases are GitHub *source tarballs* (auto-generated per tag — nothing is
+stored in GitHub Releases). The dizzyos app layer is pure Python, so an
+update is: download, unpack, flip a symlink, restart, health-check.
+
+Layout (see also bootstrap.sh):
+    /opt/dizzyos/releases/<tag>/   unpacked tarballs
+    /opt/dizzyos/current           symlink -> releases/<tag>; the flip IS the deploy
+    /opt/dizzyos/venv              shared venv (platform-managed)
+    /etc/dizzyos/update.conf       REPO=owner/name, optional CHANNEL
+    /run/dizzyos/heartbeat         touched by the running kernel; our health signal
+
+Health + rollback: after flipping and restarting we wait for a fresh
+heartbeat. No heartbeat -> flip back to the previous release, restart, and
+mark the new one `.bad` so the timer never retries it. A bad release must
+never brick a sign you'd have to go collect.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.request
+
+ROOT = "/opt/dizzyos"
+RELEASES = os.path.join(ROOT, "releases")
+CURRENT = os.path.join(ROOT, "current")
+CONF = "/etc/dizzyos/update.conf"
+HEARTBEAT = "/run/dizzyos/heartbeat"
+HEALTH_TIMEOUT = 90     # seconds to wait for a fresh heartbeat after restart
+KEEP = 2                # prior releases retained for rollback
+
+
+def log(msg):
+    print(f"dizzyos-update: {msg}", flush=True)
+
+
+def conf():
+    values = {"REPO": "ibennet/dizzyos"}
+    if os.path.exists(CONF):
+        with open(CONF, encoding="utf-8") as fh:
+            for line in fh:
+                if "=" in line and not line.lstrip().startswith("#"):
+                    key, _, val = line.partition("=")
+                    values[key.strip()] = val.strip()
+    return values
+
+
+def http_json(url):
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                               "User-Agent": "dizzyos-update"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+
+def latest_tag(repo):
+    """Newest release tag, or None before the first release has been cut."""
+    try:
+        return http_json(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
+
+
+def current_tag():
+    if os.path.islink(CURRENT):
+        return os.path.basename(os.readlink(CURRENT))
+    return None
+
+
+def fetch_release(repo, ref, name):
+    """Download + unpack a source tarball into releases/<name>. Idempotent."""
+    dest = os.path.join(RELEASES, name)
+    if os.path.isdir(dest):
+        return dest
+    url = f"https://github.com/{repo}/archive/{ref}.tar.gz"
+    log(f"downloading {url}")
+    os.makedirs(RELEASES, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=RELEASES) as tmp:
+        tar_path = os.path.join(tmp, "release.tar.gz")
+        with urllib.request.urlopen(url, timeout=120) as resp, open(tar_path, "wb") as out:
+            shutil.copyfileobj(resp, out)
+        with tarfile.open(tar_path) as tar:
+            members = tar.getmembers()
+            for m in members:  # refuse path traversal
+                if m.name.startswith(("/", "..")) or ".." in m.name.split("/"):
+                    raise RuntimeError(f"unsafe tar member: {m.name}")
+            tar.extractall(tmp)
+        # GitHub tarballs unpack to a single "<repo>-<ref>/" top dir.
+        top = next(d for d in os.listdir(tmp)
+                   if os.path.isdir(os.path.join(tmp, d)) and d != "__MACOSX")
+        os.rename(os.path.join(tmp, top), dest)
+    return dest
+
+
+def pip_install(release_dir):
+    reqs = os.path.join(release_dir, "requirements-pi.txt")
+    if os.path.exists(reqs):
+        subprocess.run([os.path.join(ROOT, "venv/bin/pip"), "install", "-q", "-r", reqs],
+                       check=True)
+
+
+def flip(name):
+    """Atomically point `current` at releases/<name>."""
+    tmp = CURRENT + ".tmp"
+    if os.path.lexists(tmp):
+        os.remove(tmp)
+    os.symlink(os.path.join("releases", name), tmp)
+    os.replace(tmp, CURRENT)
+
+
+def restart():
+    subprocess.run(["systemctl", "restart", "dizzyos"], check=True)
+
+
+def healthy(since):
+    """Wait for the kernel to prove it is rendering: a heartbeat newer than
+    the flip. `Restart=always` would happily loop a crashing release forever,
+    which is exactly why this check exists."""
+    deadline = time.monotonic() + HEALTH_TIMEOUT
+    while time.monotonic() < deadline:
+        try:
+            if os.stat(HEARTBEAT).st_mtime >= since:
+                return True
+        except FileNotFoundError:
+            pass
+        time.sleep(3)
+    return False
+
+
+def prune():
+    keep = {current_tag()}
+    tags = sorted((d for d in os.listdir(RELEASES)
+                   if os.path.isdir(os.path.join(RELEASES, d))),
+                  key=lambda d: os.path.getmtime(os.path.join(RELEASES, d)),
+                  reverse=True)
+    for tag in tags[KEEP + 1:]:
+        if tag not in keep:
+            log(f"pruning old release {tag}")
+            shutil.rmtree(os.path.join(RELEASES, tag))
+
+
+def refresh_payload(release_dir):
+    """A release may ship a newer updater/units; stage them for next time."""
+    src = os.path.join(release_dir, "tools", "pi")
+    if not os.path.isdir(src):
+        return
+    payload = os.path.join(ROOT, "payload")
+    for fname in ("dizzyos-update", "bootstrap.sh"):
+        path = os.path.join(src, fname)
+        if os.path.exists(path):
+            shutil.copy2(path, payload)
+            os.chmod(os.path.join(payload, fname), 0o755)
+    sysd = os.path.join(src, "systemd")
+    if os.path.isdir(sysd):
+        for fname in os.listdir(sysd):
+            shutil.copy2(os.path.join(sysd, fname), payload)
+
+
+def main():
+    install = "--install" in sys.argv
+    force = "--force" in sys.argv
+    repo = conf()["REPO"]
+
+    tag = latest_tag(repo)
+    if tag is None:
+        if not install:
+            log("no releases published yet; nothing to do")
+            return 0
+        # Bootstrap before the first release exists: track main directly.
+        log("no releases yet — installing from the main branch")
+        tag, ref = "main", "refs/heads/main"
+    else:
+        ref = f"refs/tags/{tag}"
+
+    prev = current_tag()
+    if tag == prev and not force:
+        log(f"already on {tag}")
+        return 0
+    if os.path.exists(os.path.join(RELEASES, tag + ".bad")) and not force:
+        log(f"{tag} is marked bad from a failed deploy; skipping (--force to retry)")
+        return 0
+
+    release_dir = fetch_release(repo, ref, tag)
+    pip_install(release_dir)
+
+    log(f"flipping {prev or '(none)'} -> {tag}")
+    flip_time = time.time()
+    flip(tag)
+    restart()
+
+    if not healthy(flip_time):
+        log(f"HEALTH CHECK FAILED for {tag}")
+        open(os.path.join(RELEASES, tag + ".bad"), "w").close()
+        if prev:
+            log(f"rolling back to {prev}")
+            flip(prev)
+            restart()
+        return 1
+
+    log(f"{tag} is up and rendering")
+    refresh_payload(release_dir)
+    prune()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
