@@ -13,6 +13,10 @@ stops:
   - { id: "F11", name: "Lex/53", routes: ["E", "M"] }
   - { id: "630", name: "51 St", routes: ["6"] }        # the 4/5 run express past it
   - { id: "R11", name: "Lex/59", routes: ["N", "R", "W"] }
+# Trains arriving sooner than this (minutes) are ignored — set it to roughly how long
+# it takes you to reach the platform, so the sign only shows trains you could catch.
+# 0 shows everything, including trains arriving right now.
+min_minutes: 5
 # Trains further out than this (minutes) are ignored.
 max_minutes: 60
 # Trains shown per direction, per stop.

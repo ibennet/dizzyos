@@ -178,12 +178,17 @@ class SubwayApp(App):
         )
 
     def _next_trains(self, stop, direction, now):
-        """Up to `per_direction` upcoming trains as (route, minutes), soonest first."""
+        """Up to `per_direction` upcoming trains as (route, minutes), soonest first.
+
+        `min_minutes` hides trains too soon to be worth walking for; `max_minutes`
+        hides ones too far out to be useful.
+        """
+        min_mins = self.config.get("min_minutes", 0)
         max_mins = self.config.get("max_minutes", 60)
         upcoming = []
         for route, when in self._arrivals.get(stop["id"], {}).get(direction, ()):
             mins = int((when - now) // 60)
-            if 0 <= mins <= max_mins:
+            if min_mins <= mins <= max_mins:
                 upcoming.append((route, mins))
             if len(upcoming) >= self.config.get("per_direction", 2):
                 break  # the buckets are time-sorted, so the rest are further out
