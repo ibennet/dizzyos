@@ -1,0 +1,31 @@
+# Release automation: release-please watches main and maintains a rolling
+# release PR (CHANGELOG + the next version computed from Conventional Commit
+# squash titles). Cutting a release = merging that PR — it tags v<semver> on
+# main, publishes the GitHub Release, and bumps `__version__` in
+# kernel/__init__.py (via the x-release-please-version annotation).
+# Pre-1.0 mapping (see release-please-config.json): a breaking change bumps
+# 0.MINOR, feat/fix bump .PATCH — minor releases mark milestones; force one
+# without a breaking change via a "Release-As: 0.x.0" footer.
+#
+# Releases carry NO build artifacts, by design. dizzyos above the driver layer
+# is pure Python, so the Pi updater (tools/pi/dizzyos-update) just fetches the
+# source tarball GitHub auto-generates for the tag. Nothing to build, nothing
+# to store, and the tag is the single source of truth for what a sign is running.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
