@@ -12,6 +12,66 @@ import time
 
 from PIL import Image
 
+#: Transition styles selectable via `launcher.transition` in config.yaml.
+TRANSITIONS = ("crossfade", "slide", "wipe", "blank_wipe", "cut_wipe", "none")
+
+#: Fraction of a `cut_wipe` spent holding on black before the incoming frame wipes in.
+CUT_HOLD = 0.15
+
+
+def _ease_in_out(t):
+    """Cubic ease-in-out — slow at both ends, quick through the middle. What makes a
+    slide feel deliberate rather than mechanical."""
+    return 4 * t * t * t if t < 0.5 else 1 - ((-2 * t + 2) ** 3) / 2
+
+
+def compose_transition(style, last, nxt, alpha):
+    """Blend the outgoing frame `last` into the incoming frame `nxt` at progress
+    `alpha` (0..1), in the given style. Returns a new RGB image."""
+    width, height = last.size
+
+    if style == "slide":
+        # Both frames travel together, iPad-style: outgoing exits left as the
+        # incoming follows it in from the right.
+        offset = int(_ease_in_out(alpha) * width)
+        frame = Image.new("RGB", (width, height), "black")
+        frame.paste(last, (-offset, 0))
+        frame.paste(nxt, (width - offset, 0))
+        return frame
+
+    if style == "wipe":
+        # Neither frame moves; the incoming one is revealed left to right.
+        frame = last.copy()
+        cut = int(alpha * width)
+        if cut > 0:
+            frame.paste(nxt.crop((0, 0, cut, height)), (0, 0))
+        return frame
+
+    if style == "blank_wipe":
+        # Two beats: wipe the outgoing frame away to black, then wipe the incoming
+        # one in over that black. Reads as a deliberate "clear the sign" gesture.
+        frame = Image.new("RGB", (width, height), "black")
+        if alpha < 0.5:
+            cut = int(alpha * 2 * width)
+            frame.paste(last.crop((cut, 0, width, height)), (cut, 0))
+        else:
+            cut = int((alpha - 0.5) * 2 * width)
+            if cut > 0:
+                frame.paste(nxt.crop((0, 0, cut, height)), (0, 0))
+        return frame
+
+    if style == "cut_wipe":
+        # The outgoing frame is cut to black in a single frame — no wipe-away — then
+        # after a short hold the incoming one wipes in. The blackout is the beat.
+        frame = Image.new("RGB", (width, height), "black")
+        if alpha > CUT_HOLD:
+            cut = int((alpha - CUT_HOLD) / (1 - CUT_HOLD) * width)
+            if cut > 0:
+                frame.paste(nxt.crop((0, 0, cut, height)), (0, 0))
+        return frame
+
+    return Image.blend(last, nxt, alpha)  # crossfade, and the fallback
+
 
 class Launcher:
     def __init__(self, matrix, apps, cfg, services, clock=time.monotonic, sleep=time.sleep):
@@ -74,19 +134,24 @@ class Launcher:
         return stop
 
     def _transition_to(self, incoming, outgoing, canvas):
-        """Crossfade from the outgoing app's last frame to the incoming app's first."""
-        if self.transition != "crossfade" or self.transition_ms <= 0:
+        """Animate from the outgoing app's last frame to the incoming app's first,
+        in the configured style (see TRANSITIONS / compose_transition)."""
+        if self.transition == "none" or self.transition_ms <= 0:
             return canvas
+        if self.transition not in TRANSITIONS:
+            self.services.log(
+                f"launcher: unknown transition {self.transition!r}, using crossfade"
+            )
         incoming.on_start(self.services)
         incoming.refresh()
         frame_time = 1.0 / self.target_fps
-        steps = max(int((self.transition_ms / 1000.0) * self.target_fps), 1)
+        duration = self.transition_ms / 1000.0
+        steps = max(int(duration * self.target_fps), 1)
         last = outgoing.render(outgoing.dwell or self.default_dwell).convert("RGB")
         for i in range(1, steps + 1):
             alpha = i / steps
-            nxt = incoming.render((i / steps) * (frame_time * steps)).convert("RGB")
-            blended = Image.blend(last, nxt, alpha)
-            canvas.SetImage(blended)
+            nxt = incoming.render(alpha * duration).convert("RGB")
+            canvas.SetImage(compose_transition(self.transition, last, nxt, alpha))
             canvas = self.matrix.SwapOnVSync(canvas)
             self.sleep(frame_time)
         incoming.on_stop()  # will be re-started by the next _run_app
