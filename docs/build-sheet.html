@@ -298,7 +298,7 @@
     <div class="meta">
       <div class="cell"><span class="lbl">Display</span><span class="val">2 × 64×64 P3</span></div>
       <div class="cell"><span class="lbl">Finished size</span><span class="val">16¾ × 9¼ × 2½ in</span></div>
-      <div class="cell"><span class="lbl">Tools needed</span><span class="val">saw · drill · iron</span></div>
+      <div class="cell"><span class="lbl">Tools needed</span><span class="val">saw · drill · iron · level</span></div>
       <div class="cell"><span class="lbl">Build time</span><span class="val">~3 hrs + finish</span></div>
     </div>
   </header>
@@ -358,7 +358,7 @@
           <text x="330" y="26" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">assembles front ←</text>
         </svg>
       </div>
-      <figcaption><b>Everything mounts to the back panel.</b> Undo the 13 perimeter screws and the
+      <figcaption><b>Everything mounts to the back panel.</b> Undo the four corner screws and the
         panels, the Pi and all the wiring lift out as one piece — which is what you want the first
         time a jumper needs soldering. Note the cost, though: there is no hatch, so this is the
         <em>only</em> way in. Reaching the Pi means taking the sign down and opening the back on a
@@ -547,11 +547,14 @@
       <label class="item"><input type="checkbox"><span class="body"><strong>#6 × ⅝ in wood screws</strong><span>Back panel and face — short enough not to punch through ¾ in stock</span></span><a class="price" href="https://www.homedepot.com/s/%236%20x%205%2F8%20in%20wood%20screws" target="_blank" rel="noopener">$7 ↗</a></label>
       <label class="item"><input type="checkbox"><span class="body"><strong>M3 × 55 mm machine screws, 8 — <em>no nuts needed</em></strong><span>Metric drawer in the fastener aisle. Long because each one crosses the back board and both spacers — 50.8 mm — before it reaches the panel at all. The panel's holes are threaded, so the screw bites into the panel itself rather than taking a nut</span></span><a class="price" href="https://www.homedepot.com/s/m3%20machine%20screw" target="_blank" rel="noopener">$8 ↗</a></label>
       <label class="item"><input type="checkbox"><span class="body"><strong>Nylon spacers — 1 in and ¾ in, 8 of each, plus 4 × ¼ in</strong><span>Stacked, they make the 1¾ in that stands the panels just behind the acrylic. Buy both sizes: their spacers stop at 1 in, so no single one is long enough. Get the narrow-bore 1 in (0.171 in I.D.) so it guides the M3 screw rather than letting it rattle. The four ¼ in ones are for the Pi</span></span><a class="price" href="https://www.homedepot.com/b/Hardware-Fasteners-Spacers/Nylon/N-5yc1vZc2fdZ1z0vn0d" target="_blank" rel="noopener">$10 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Keyhole hangers, 2</strong><span>How it goes on the wall. Rated far past the sign's ~2.3 kg; site them so their screws reach the frame's top rail, not just the thin plywood</span></span><a class="price" href="https://www.homedepot.com/s/keyhole%20hanger" target="_blank" rel="noopener">$5 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Recessed magnetic catches, 2</strong><span>Hold the middle of the back flat between the corner screws. Magnets because they can sit flush — a latch or thumbscrew would stand proud of a wall-hung back</span></span><a class="price" href="https://www.homedepot.com/s/magnetic%20catch" target="_blank" rel="noopener">$7 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Drywall anchors, 10 kg rated</strong><span>Only if you cannot hit a stud. Skip if you can</span></span><a class="price" href="https://www.homedepot.com/s/drywall%20anchor" target="_blank" rel="noopener">$6 ↗</a></label>
       <label class="item"><input type="checkbox"><span class="body"><strong>M2.5 × 20 mm machine screws + M2.5 nuts, 4 each</strong><span>For the Pi, whose holes are plain through-holes. Same metric drawer as the M3 — Home Depot does stock M2.5, just not the threaded standoffs an electronics shop sells</span></span><a class="price" href="https://www.homedepot.com/b/Hardware-Fasteners-Screws-Machine-Screws/M25/Metric/N-5yc1vZc27iZ1z0sc32Z1z0sfxi" target="_blank" rel="noopener">$8 ↗</a></label>
       <label class="item"><input type="checkbox"><span class="body"><strong>Weller soldering iron kit, 30–60 W</strong><span>The two HAT jumpers. Without them: dark bands across the panels and permanent flicker</span></span><a class="price" href="https://www.homedepot.com/b/Tools-Welding-Soldering-Brazing-Soldering-Equipment-Soldering-Irons/Weller/N-5yc1vZ1z18gw8Z1lw" target="_blank" rel="noopener">$25 ↗</a></label>
       <label class="item"><input type="checkbox"><span class="body"><strong>Rosin-core solder, thin gauge</strong><span><strong>Not</strong> the plumbing aisle's acid-core — acid flux corrodes electronics</span></span><a class="price" href="https://www.homedepot.com/b/Tools-Welding-Soldering-Brazing-Soldering-Equipment-Solder-Solder-Wire/Rosin-Cored/N-5yc1vZ1z18gvgZ1z1a2o8" target="_blank" rel="noopener">$12 ↗</a></label>
     </div>
-    <div class="totals"><span>Essentials: <b>~$130</b></span></div>
+    <div class="totals"><span>Essentials: <b>~$148</b></span></div>
 
     <h3>Tools — skip anything you already own</h3>
     <div class="list">
@@ -819,9 +822,29 @@
 
       <li><strong>Seat the back assembly.</strong> Lift the whole back board — panels, Pi, wiring
         and all — and lower it into the frame from behind, feeding the power leads out through
-        the hole. Screw it to the back of the frame with the short screws, <strong>13 of them, about
-        4 in apart</strong> all the way round. Fewer and the thin plywood bows between them and
-        daylight shows at the seam.</li>
+        the hole. Fix it with <strong>four countersunk screws, one at each corner</strong>, and a
+        <strong>recessed magnetic catch at the middle of each long side</strong>.
+        <br><br>
+        The split is deliberate. The corner screws are the structure — a sheet pinned at its
+        corners is what stops the frame racking, and it is the reason this build needs no corner
+        braces. The magnets are not structural at all; they just hold the middle of the span flat
+        so the seam closes. Four screws is what you undo to get back in.
+        <br><br>
+        Countersink the screw heads flush and set the magnets into shallow recesses. Nothing may
+        stand proud of the back face — the sign hangs on a wall, and hardware sticking out rocks
+        the case against the plaster. That is also why this is not a latch: a toggle catch or
+        thumbscrew stands about 10 mm off the back and would be much nicer to open, but there is
+        1 mm to play with.</li>
+
+      <li><strong>Hang it.</strong> Fit <strong>two keyhole hangers</strong> to the back board, one
+        near each top corner, positioned so their screws land in the frame's top rail — ¾ in of
+        pine to bite into, rather than ¼ in of plywood. The sign weighs about 2.3 kg; keyhole
+        hangers are rated well past that, and the pair spreads the load across two fixings.
+        <br><br>
+        Mark both wall screws off the hangers at once, using a level. Into a stud if you can find
+        one; into drywall anchors rated 10 kg or better if you cannot. Then hook it on and check
+        it sits flat — if it rocks, something on the back is proud and wants countersinking
+        further.</li>
 
       <li><strong>Fit the face and you're done.</strong> Peel the film off the acrylic and screw it to
         the front of the frame — go gently,

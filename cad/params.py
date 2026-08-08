@@ -67,6 +67,9 @@ class Panel:
     depth: float = 15.0
     #: Mounting points on the back. Adafruit's 64×64 P3 (4732) has four.
     mount_holes: int = 4
+    #: Kilograms. Weigh yours if you have a kitchen scale — this is the biggest
+    #: single contributor to what the wall has to hold.
+    mass: float = 0.35
     #: These are threaded M3 inlets, NOT through-holes — the screw threads into
     #: the panel and takes no nut. That is why the mounting screw has to span
     #: the back board and the whole spacer stack before it engages anything,
@@ -122,6 +125,48 @@ MIN_NUT_ENGAGEMENT = 2.0
 #: not because the design uses one but because it must not: see
 #: `Case.inner_face_clearance`.
 BRACE_THICKNESS = 2.0
+
+#: Densities in kg/m³, for estimating what the finished sign weighs — which is
+#: what decides the wall fixing. Rough by nature; the point is the order of
+#: magnitude, not three significant figures.
+DENSITY_PINE = 500.0
+DENSITY_PLYWOOD = 550.0
+DENSITY_ACRYLIC = 1180.0
+
+#: The sign hangs on a wall, so nothing on the back face may stand proud of it
+#: or the case rocks on its own hardware and marks the plaster. This is the
+#: budget, and it is why the back panel takes flush screws and magnets rather
+#: than the toggle latches or thumbscrews that would be nicer to open.
+MAX_BACK_PROTRUSION = 1.0
+
+#: What actually sits on the back face, and how far each stands off it in mm.
+#: All of it has to come in under `MAX_BACK_PROTRUSION`.
+BACK_FACE_HARDWARE = (
+    ('countersunk #6 screw head', 0.0),
+    ('recessed magnetic catch', 0.0),
+    ('keyhole hanger plate', 0.8),
+)
+
+#: Fastenings that would be nicer to open and are ruled out by the wall, kept
+#: so the reason survives the next person wondering why the back takes screws.
+REJECTED_BACK_HARDWARE = (
+    ('toggle/draw latch', 10.0),
+    ('captive thumbscrew', 9.0),
+    ('surface-mounted turn button', 3.0),
+)
+
+#: Wall fixings, with the load each is rated for in kg. Ratings are per pair
+#: where a pair is what you would fit.
+WALL_HANGERS = (
+    ('sawtooth hanger', 4.5),
+    ('two D-rings and picture wire', 9.0),
+    ('two keyhole hangers', 14.0),
+    ('interlocking flush-mount (Z-bar) pair', 23.0),
+)
+
+#: Hold nothing to less than this multiple of its actual load. Overhead things
+#: fall on people, and the cost of the next size up is nil.
+HANGER_SAFETY_FACTOR = 4.0
 
 
 @dataclass(frozen=True)
@@ -351,20 +396,65 @@ class Case:
         # Nothing long enough: "a stock M2.5 screw clears the Pi stack" says so.
         return min(fits) if fits else max(STOCK_M25_SCREWS)
 
-    #: How far apart the back board's perimeter screws sit. Wider than this and
-    #: the thin plywood bows between them and daylight shows at the seam.
-    back_screw_spacing: float = 4 * MM_PER_INCH
+    #: Screws at the corners of the back board. These are the structure: a
+    #: sheet fixed at its corners is what stops the frame racking into a
+    #: parallelogram, and it is why this build needs no corner braces (which
+    #: could not fit anyway — see `inner_face_clearance`).
+    back_corner_screws: int = 4
+    #: Recessed magnetic catches between them, holding the middle of each long
+    #: side flat. Magnets, specifically: the sign hangs on a wall, so a toggle
+    #: latch or thumbscrew — far nicer to open — would stand proud of the back
+    #: face and rock the case against the plaster. A magnet can sit flush.
+    #: They contribute nothing structural; they only close the gap.
+    back_magnets: int = 2
 
     @property
-    def back_screws(self):
-        """Screws holding the back board on — the count you undo for access.
+    def back_fixings(self):
+        """Every point holding the back board on."""
+        return self.back_corner_screws + self.back_magnets
 
-        Worth deriving rather than eyeballing: this is the number that decides
-        whether getting to the Pi is a two-minute job or a project, and the
-        build sheet claimed eight against a 52 in perimeter.
+    @property
+    def opening_fasteners(self):
+        """How many things you undo to get in — the real service cost.
+
+        Only the screws count: the magnets let go on their own. Worth deriving
+        because this number is the whole answer to "is the Pi accessible", and
+        the build sheet has already claimed both eight and thirteen.
         """
-        perimeter = 2 * (self.outer_width + self.outer_height)
-        return math.ceil(perimeter / self.back_screw_spacing)
+        return self.back_corner_screws
+
+    # --- hanging it on a wall ---------------------------------------------
+    @property
+    def estimated_mass(self):
+        """Roughly what the finished sign weighs, in kg.
+
+        Deliberately an estimate: it exists to pick a wall fixing, where being
+        within a few hundred grams is plenty and the safety factor absorbs the
+        rest. Weigh the panels if you want it tighter — they dominate.
+        """
+        mm3 = 1e-9                                     # mm³ to m³
+        frame = (self.board_length_needed * self.stock.frame_thickness
+                 * self.stock.frame_depth) * mm3 * DENSITY_PINE
+        back = (self.outer_width * self.outer_height
+                * self.stock.back_thickness) * mm3 * DENSITY_PLYWOOD
+        face = (self.outer_width * self.outer_height
+                * self.stock.acrylic_thickness) * mm3 * DENSITY_ACRYLIC
+        panels = self.panel.mass * self.panels_x * self.panels_y
+        #: Pi, HAT, riser, cabling and fasteners, lumped.
+        electronics = 0.25
+        return frame + back + face + panels + electronics
+
+    @property
+    def hanger(self):
+        """Lightest wall fixing rated for the sign with the safety factor on.
+
+        Returns (description, rating_kg). Falls through to the strongest listed
+        if nothing qualifies, so the check reports it rather than raising.
+        """
+        need = self.estimated_mass * HANGER_SAFETY_FACTOR
+        fits = [h for h in WALL_HANGERS if h[1] >= need]
+        return min(fits, key=lambda h: h[1]) if fits else max(
+            WALL_HANGERS, key=lambda h: h[1])
 
     @property
     def spacers_needed(self):
@@ -409,6 +499,10 @@ class Case:
             f" panel sits {self.panel_recess:.1f} mm behind the acrylic)",
             f"  spacer stacks       {self.spacers_needed}"
             f"  ({self.panel.mount_holes} per panel)",
+            f"  weighs about        {self.estimated_mass:.1f} kg",
+            f"  hang it on          {self.hanger[0]} (rated {self.hanger[1]:.0f} kg)",
+            f"  back held by        {self.back_corner_screws} corner screws"
+            f" + {self.back_magnets} magnets — undo {self.opening_fasteners} to open",
             f"  panel screws        M3 × {self.panel_screw_length:.0f} mm"
             f"  ({self.panel_screw_engagement:.1f} mm into a"
             f" {self.panel.mount_thread_depth:.0f} mm inlet)",

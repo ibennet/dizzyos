@@ -15,9 +15,11 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cad.params import (BRACE_THICKNESS, CASE,  # noqa: E402
+from cad.params import (BACK_FACE_HARDWARE, BRACE_THICKNESS,  # noqa: E402
+                        CASE, HANGER_SAFETY_FACTOR, MAX_BACK_PROTRUSION,
                         MIN_NUT_ENGAGEMENT, MIN_THREAD_ENGAGEMENT,
-                        STOCK_STANDOFFS, fraction, inches)
+                        REJECTED_BACK_HARDWARE, STOCK_STANDOFFS,
+                        fraction, inches)
 
 passed = 0
 failures = []
@@ -120,6 +122,34 @@ check("the cavity is too tight for inner-face hardware — keep it bare",
       c.inner_face_clearance < BRACE_THICKNESS,
       f"{c.inner_face_clearance:.2f} mm per side now exceeds a "
       f"{BRACE_THICKNESS} mm brace — the guide may say to fit them again")
+
+print("hanging it on a wall")
+check("the hanger is rated for the sign with margin",
+      c.hanger[1] >= c.estimated_mass * HANGER_SAFETY_FACTOR,
+      f"{c.hanger[0]} is rated {c.hanger[1]:.0f} kg; "
+      f"{c.estimated_mass:.1f} kg × {HANGER_SAFETY_FACTOR:.0f} wants "
+      f"{c.estimated_mass * HANGER_SAFETY_FACTOR:.1f} kg")
+# The corners are the shear path. Magnets carry none, so however many catches
+# get added, the screws at the corners cannot be traded away for them.
+check("the corners are still screwed, not latched",
+      c.back_corner_screws >= 4,
+      f"only {c.back_corner_screws} corner screws — the frame can rack, and "
+      f"corner braces cannot be added to compensate")
+# Wall-hung: anything proud of the back face rocks the case against the plaster.
+# This is the constraint that rules out the latches worth wanting.
+for name, proud in BACK_FACE_HARDWARE:
+    check(f"{name} sits flush enough for a wall",
+          proud <= MAX_BACK_PROTRUSION,
+          f"{proud} mm proud, over the {MAX_BACK_PROTRUSION} mm budget")
+# And the converse, so the reason the nice latches are absent stays on record
+# rather than looking like an oversight someone should helpfully fix.
+for name, proud in REJECTED_BACK_HARDWARE:
+    check(f"{name} is correctly ruled out",
+          proud > MAX_BACK_PROTRUSION,
+          f"{name} would now fit in {MAX_BACK_PROTRUSION} mm — reconsider it")
+check("opening the case is a short job",
+      c.opening_fasteners <= 6,
+      f"{c.opening_fasteners} fasteners to undo before you reach the Pi")
 
 print("panel mounting screws")
 # The inlets are threaded and blind, so the screw is caught between reaching
@@ -226,9 +256,13 @@ else:
     # perimeter. That number sets how hard the Pi is to reach, so state it once
     # and derive it — an optimistic count here reads as a design that is easier
     # to service than it is.
-    check(f"sheet quotes the back as {c.back_screws} screws",
-          str(c.back_screws) in sheet,
-          f"the sheet does not say the back takes {c.back_screws} screws")
+    check(f"sheet says {c.opening_fasteners} screws open the back",
+          str(c.opening_fasteners) in sheet,
+          f"the sheet does not say the back opens with "
+          f"{c.opening_fasteners} screws")
+    check("sheet names the wall fixing",
+          c.hanger[0] in sheet,
+          f"the sheet never says to hang it on {c.hanger[0]}")
     # The guide used to say "screw a flat L-bracket across each inside corner",
     # which at 2 mm would foul panels that have 1.67 mm a side. Geometry alone
     # cannot catch prose, so check the prose.
