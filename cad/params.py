@@ -118,6 +118,11 @@ STOCK_M25_SCREWS = (4, 5, 6, 10, 20)
 #: A nut needs about its own height of thread through it to pull up tight.
 MIN_NUT_ENGAGEMENT = 2.0
 
+#: A flat steel corner brace, the thin kind sold four to a pack. Recorded here
+#: not because the design uses one but because it must not: see
+#: `Case.inner_face_clearance`.
+BRACE_THICKNESS = 2.0
+
 
 @dataclass(frozen=True)
 class Stock:
@@ -215,6 +220,19 @@ class Case:
     @property
     def actual_clearance_y(self):
         return self.opening_height - self.panels_height
+
+    @property
+    def inner_face_clearance(self):
+        """Room for anything mounted on the frame's inner faces. There is none.
+
+        The back assembly comes out backwards, which drags the panels through
+        the whole depth of the cavity — so the inner faces are a swept volume,
+        not spare surface. Whatever the clearance around the panels is, that is
+        the total budget for brackets, blocks, wire clips and cable ties, and it
+        is under 2 mm: less than the steel corner brace this build guide used to
+        tell you to screw into all four corners.
+        """
+        return min(self.actual_clearance_x, self.actual_clearance_y) / 2
 
     @property
     def outer_width(self):

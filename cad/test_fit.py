@@ -15,9 +15,9 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cad.params import (CASE, MIN_NUT_ENGAGEMENT,  # noqa: E402
-                        MIN_THREAD_ENGAGEMENT, STOCK_STANDOFFS,
-                        fraction, inches)
+from cad.params import (BRACE_THICKNESS, CASE,  # noqa: E402
+                        MIN_NUT_ENGAGEMENT, MIN_THREAD_ENGAGEMENT,
+                        STOCK_STANDOFFS, fraction, inches)
 
 passed = 0
 failures = []
@@ -104,6 +104,22 @@ check("Pi stack clears the panels",
 check("cable headroom behind the stack",
       c.stack_headroom >= 8,
       f"only {c.stack_headroom:.1f} mm — ribbons need room to turn")
+
+print("getting the back assembly in and out")
+# Everything mounts to the back board, so it comes out backwards — dragging the
+# panels through the full depth of the cavity. That makes the frame's inner
+# faces a swept volume, and the clearance around the panels the entire budget
+# for anything screwed to them.
+check("the panels can pass through the opening at all",
+      c.inner_face_clearance > 0,
+      f"{c.inner_face_clearance:.2f} mm per side — the assembly cannot come out")
+# This one is expected to hold in the negative: there is NOT room, which is why
+# the design must keep the cavity bare. Asserting it stops someone reading the
+# spare 2 mm as somewhere to put a bracket.
+check("the cavity is too tight for inner-face hardware — keep it bare",
+      c.inner_face_clearance < BRACE_THICKNESS,
+      f"{c.inner_face_clearance:.2f} mm per side now exceeds a "
+      f"{BRACE_THICKNESS} mm brace — the guide may say to fit them again")
 
 print("panel mounting screws")
 # The inlets are threaded and blind, so the screw is caught between reaching
@@ -213,6 +229,18 @@ else:
     check(f"sheet quotes the back as {c.back_screws} screws",
           str(c.back_screws) in sheet,
           f"the sheet does not say the back takes {c.back_screws} screws")
+    # The guide used to say "screw a flat L-bracket across each inside corner",
+    # which at 2 mm would foul panels that have 1.67 mm a side. Geometry alone
+    # cannot catch prose, so check the prose.
+    steps = sheet[sheet.index('<ol class="steps">'):] if '<ol class="steps">' in sheet else ""
+    # Match an instruction to fit one, not any mention — the sheet SHOULD warn
+    # about braces, and a bare substring test flags its own warning.
+    fitting = re.search(r"(screw|fit|attach|install|add)\b[^.]{0,40}"
+                        r"(corner brace|l-bracket)", steps, re.I)
+    check("no assembly step puts hardware inside the cavity",
+          fitting is None,
+          f"a step says {fitting.group(0)!r} — the panels sweep those faces"
+          if fitting else "")
 
 print()
 print(c.report())
