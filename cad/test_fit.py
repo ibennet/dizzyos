@@ -283,7 +283,10 @@ else:
     stage_nums = [int(n) for n in
                   re.findall(r"\d+", re.sub(r"//[^\n]*", "", gbs.group(1)))] \
         if gbs else []
-    parts = re.search(r"var PARTS = \[(.*?)\n      \];", sheet, re.S)
+    # Everything from the parts literal to the face builder — the generators
+    # that follow the literal declare stages too, so reading only the literal
+    # under-reports and wrongly calls a generated stage idle.
+    parts = re.search(r"var PARTS = \[(.*?)var FACES =", sheet, re.S)
     body = parts.group(1) if parts else ""
     appears = [int(n) for n in re.findall(r"\bg:\s*(\d+)", body)]
     seats = [int(n) for n in re.findall(r"\bgi:\s*(\d+)", body)]
@@ -299,6 +302,29 @@ else:
           rest is not None and int(rest.group(1)) == top_part,
           f"rests at {rest.group(1) if rest else 'nothing'}, "
           f"but the build finishes at {top_part}")
+    # The drawing declares how many of each fastener it renders. It showed four
+    # panel spacers for a long time against a design needing eight, and no
+    # fasteners at all — so tie the declaration to the derived counts.
+    cblock = re.search(r"var COUNTS = \{(.*?)\};", sheet, re.S)
+    counts = dict((k, int(v)) for k, v in
+                  re.findall(r"(\w+):\s*(\d+)", cblock.group(1))) \
+        if cblock else {}
+    e = c.electronics
+    for key, want, why in (
+            ("panelSpacers", c.spacers_needed, "one per panel mounting hole"),
+            ("panelScrews", c.spacers_needed, "one M3 up through each stack"),
+            ("piSpacers", e.pi_mount_holes, "one per Pi mounting hole"),
+            ("piScrews", e.pi_mount_holes, "one per Pi mounting hole"),
+            ("piNuts", e.pi_mount_holes, "the Pi's holes go through"),
+            ("backScrews", c.back_corner_screws, "the corners are the shear path"),
+            ("backMagnets", c.back_magnets, "mid-span on the long sides"),
+            ("frameScrews", c.frame_corner_screws, "two per frame corner"),
+            ("faceScrews", c.face_screws, "one per corner of the face"),
+            ("hangers", c.hanger_count, "a pair, so it hangs level")):
+        check(f"drawing shows {want} {key}",
+              counts.get(key) == want,
+              f"drawing declares {counts.get(key)}, design needs {want} — {why}")
+
     # A stage nothing happens in is a stretch of text with a frozen drawing —
     # the thing this whole animation exists to avoid.
     active = set(appears) | set(seats) | set(mids)

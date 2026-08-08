@@ -401,6 +401,14 @@ class Case:
     #: parallelogram, and it is why this build needs no corner braces (which
     #: could not fit anyway — see `inner_face_clearance`).
     back_corner_screws: int = 4
+    #: Two screws per corner, driven through the rails into the ends of the
+    #: stiles. Two rather than one so the joint cannot pivot on a single screw.
+    frame_corner_screws: int = 8
+    #: Holding the acrylic to the front of the frame, one per corner.
+    face_screws: int = 4
+    #: Keyhole hangers. A pair, so the load splits and the sign hangs level off
+    #: two wall fixings rather than pivoting on one.
+    hanger_count: int = 2
     #: Recessed magnetic catches between them, holding the middle of each long
     #: side flat. Magnets, specifically: the sign hangs on a wall, so a toggle
     #: latch or thumbscrew — far nicer to open — would stand proud of the back

@@ -252,6 +252,7 @@
   .box.steel { --edge: var(--muted); --fill: rgba(90,100,110,.55); }
   .box.hat    { --edge: var(--amber); --fill: rgba(232,137,12,.45); }
   .box.ribbon { --edge: var(--muted); --fill: rgba(150,155,165,.5); }
+  .box.screw  { --edge: var(--rule-strong); --fill: rgba(70,78,88,.75); }
 
   /* ---- steps ----
      Compact list; the active step is whichever one sits nearest the focus line
@@ -669,10 +670,14 @@
       </div>
       <figcaption><b>Scroll the steps — the parts arrive as you reach them.</b> Every dimension is
         the real one from <code>cad/params.py</code>, so the model and the cut list cannot drift
-        apart. Sixteen stages, so most steps move something: wood is brown, LED panels blue, the
-        Pi and HAT amber (the HAT is the paler one, and it waits off to the side until you have
-        soldered it), ribbon and power grey, the acrylic face teal, and the keyhole hangers steel
-        on the back at the very end.</figcaption>
+        apart. Every part in the build is here — 62 of them, down to all eight panel spacers and
+        the screws through each one, so what you see is what you bought. Wood is brown, LED panels
+        blue, the Pi and HAT amber (the HAT is the paler one; it waits off to the side until you
+        have soldered it, then joins the stack), ribbon, riser and power cable grey, fasteners
+        dark steel, the acrylic face teal, and the keyhole hangers on the back at the very end.
+        <br><br>
+        Screw heads are drawn several times over size — at true scale an M3 head is under 6 mm
+        against a 425 mm case, which is honest and invisible.</figcaption>
       </figure>
      </div>
 
@@ -950,22 +955,28 @@
           g: 1, gi: 4, sx: 135, mid: [2, 30, 0, 0] },
         { cls: "wood", w: W, h: T, d: D, x: 0, y: -(H - T) / 2, z: 0,
           g: 1, gi: 4, sy: -105, mid: [2, 0, -22, 0] },
-        // 5 — the HAT, soldered loose on the bench before anything is mounted
-        { cls: "hat", w: 65, h: 56, d: 13.6, x: 40, y: 60, z: -2.2,
-          g: 5, gi: 11, sx: -150, sy: -105, sz: STAGED },
+        // 5 — the HAT, soldered loose on the bench before anything is mounted.
+        // It joins the sub-assembly at 11 while that is still parked behind the
+        // case (hence the mid pose also carrying STAGED), and only travels in
+        // with everything else at 14. Seating it at 11 would fly it into an
+        // empty frame while the Pi it bolts to is still 195 mm behind.
+        { cls: "hat", w: 65, h: 56, d: 13.6, x: 40, y: 0, z: -2.2,
+          g: 5, gi: 14, sx: -150, sy: -105, sz: STAGED,
+          mid: [11, 0, 0, STAGED] },
+        // the 2x20 stacking header the HAT sits on — the reason it clears the
+        // Pi's port cans at all
+        { cls: "ribbon", w: 51, h: 5, d: 15, x: 40, y: 25, z: -16.5,
+          g: 11, gi: 14, sz: STAGED },
         // 6-10 — the back board assembly, built up behind the case
         { cls: "wood", w: W, h: H, d: BACK, x: 0, y: 0, z: zBack - BACK / 2,
           g: 6, gi: 14, sz: STAGED },
-        { cls: "stand", w: 9, h: 9, d: STANDOFF, x: -150, y: -70, z: zBack + STANDOFF / 2, g: 7, gi: 14, sz: STAGED },
-        { cls: "stand", w: 9, h: 9, d: STANDOFF, x: -150, y: 70, z: zBack + STANDOFF / 2, g: 7, gi: 14, sz: STAGED },
-        { cls: "stand", w: 9, h: 9, d: STANDOFF, x: 150, y: -70, z: zBack + STANDOFF / 2, g: 7, gi: 14, sz: STAGED },
-        { cls: "stand", w: 9, h: 9, d: STANDOFF, x: 150, y: 70, z: zBack + STANDOFF / 2, g: 7, gi: 14, sz: STAGED },
+
         { cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: -PANEL / 2, y: 0, z: zPanel, g: 8, gi: 14, sz: STAGED },
         { cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: PANEL / 2, y: 0, z: zPanel, g: 9, gi: 14, sz: STAGED },
-        { cls: "pcb", w: 85, h: 56, d: 10, x: 40, y: 60, z: -20.4, g: 10, gi: 14, sz: STAGED },
+        { cls: "pcb", w: 85, h: 56, d: 10, x: 40, y: 0, z: -20.4, g: 10, gi: 14, sz: STAGED },
         // 11 — ribbon cables, HAT to panel and panel to panel
-        { cls: "ribbon", w: 46, h: 13, d: 1.8, x: -8, y: 26, z: 8, g: 11, gi: 14, sz: STAGED },
-        { cls: "ribbon", w: 30, h: 13, d: 1.8, x: 0, y: -34, z: 8, g: 11, gi: 14, sz: STAGED },
+        { cls: "ribbon", w: 46, h: 13, d: 1.8, x: -40, y: 26, z: 8, g: 11, gi: 14, sz: STAGED },
+        { cls: "ribbon", w: 30, h: 13, d: 1.8, x: 0, y: -42, z: 8, g: 11, gi: 14, sz: STAGED },
         // 12 — power leads, out through the hole low in the back board
         { cls: "ribbon", w: 11, h: 11, d: 34, x: -150, y: -96, z: zBack - BACK - 17,
           g: 12, gi: 14, sz: STAGED },
@@ -973,11 +984,110 @@
         { cls: "glass", w: W, h: H, d: ACRYLIC, x: 0, y: 0, z: zFront + ACRYLIC / 2,
           g: 13, gi: 15, sz: 210 },
         // 16 — the keyhole hangers, on the outside of the back board
-        { cls: "steel", w: 38, h: 16, d: 1.6, x: -130, y: (H - T) / 2 - 26,
+        { k: "hangers", cls: "steel", w: 38, h: 16, d: 1.6, x: -130, y: (H - T) / 2 - 26,
           z: zBack - BACK - 0.8, g: 16, sz: -120 },
-        { cls: "steel", w: 38, h: 16, d: 1.6, x: 130, y: (H - T) / 2 - 26,
+        { k: "hangers", cls: "steel", w: 38, h: 16, d: 1.6, x: 130, y: (H - T) / 2 - 26,
           z: zBack - BACK - 0.8, g: 16, sz: -120 }
       ];
+
+      // Every fastener the build uses, declared as counts and then generated —
+      // so the drawing cannot quietly show four spacers where the design needs
+      // eight, which is exactly what it did before. Two links to keep honest:
+      // `test_fit.py` checks these counts against cad/params.py, and the tally
+      // at the end of this block checks the generators against these counts.
+      var COUNTS = {
+        frameScrews: 8,     // 2 per corner, through the rails into the stiles
+        panelSpacers: 8,    // 4 mounting holes x 2 panels
+        panelScrews: 8,     // one M3 x 55 up through each spacer stack
+        piSpacers: 4,
+        piScrews: 4,
+        piNuts: 4,
+        backScrews: 4,      // the corners: the shear path
+        backMagnets: 2,
+        faceScrews: 4,
+        hangers: 2
+      };
+
+      // Screw heads are drawn a few times over size. At true scale an M3 head
+      // is under 6 mm on a 425 mm case — honest, and invisible.
+      var HEAD = 7, HEAD_D = 3.5;
+      var HOLE_IN = 10;                       // hole inset from a panel edge
+      var hx = PANEL / 2 - HOLE_IN;
+      var zHead = zBack - BACK - HEAD_D / 2;  // heads sit behind the back board
+
+      function add(p) { PARTS.push(p); }
+
+      // panel spacers and their screws, per panel so each arrives with its own
+      [-PANEL / 2, PANEL / 2].forEach(function (cx, pi) {
+        [-hx, hx].forEach(function (dx) {
+          [-hx, hx].forEach(function (dy) {
+            add({ k: "panelSpacers", cls: "stand", w: 9, h: 9, d: STANDOFF,
+                  x: cx + dx, y: dy, z: zBack + STANDOFF / 2,
+                  g: 7, gi: 14, sz: STAGED });
+            add({ k: "panelScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
+                  x: cx + dx, y: dy, z: zHead,
+                  g: pi === 0 ? 8 : 9, gi: 14, sz: STAGED });
+          });
+        });
+      });
+
+      // the Pi's own sandwich: spacer, screw behind, nut in front of the board
+      [[-29, -24.5], [-29, 24.5], [29, -24.5], [29, 24.5]].forEach(function (o) {
+        var px = 40 + o[0], py = o[1];
+        add({ k: "piSpacers", cls: "stand", w: 6, h: 6, d: 6.35, x: px, y: py,
+              z: zBack + 6.35 / 2, g: 10, gi: 14, sz: STAGED });
+        add({ k: "piScrews", cls: "screw", w: 5, h: 5, d: HEAD_D, x: px, y: py,
+              z: zHead, g: 10, gi: 14, sz: STAGED });
+        add({ k: "piNuts", cls: "screw", w: 5, h: 5, d: 2.4, x: px, y: py,
+              z: -16.2, g: 10, gi: 14, sz: STAGED });
+      });
+
+      // frame corner screws, in the outer faces of the rails near each end. The
+      // two at the top left arrive at 3 with the first corner; the rest at 4.
+      [(H - T) / 2 + T / 2, -((H - T) / 2 + T / 2)].forEach(function (ry) {
+        [-1, 1].forEach(function (side) {
+          [14, 40].forEach(function (inset) {
+            add({ k: "frameScrews", cls: "screw", w: HEAD, h: HEAD_D, d: HEAD,
+                  x: side * (W / 2 - inset),
+                  y: ry - (ry > 0 ? 1 : -1) * HEAD_D / 2, z: 0,
+                  g: (ry > 0 && side === -1) ? 3 : 4,
+                  sy: (ry > 0 ? 1 : -1) * 70 });
+          });
+        });
+      });
+
+      // back board: screws at the corners, magnets mid-span on the long sides
+      [-1, 1].forEach(function (sx) {
+        [-1, 1].forEach(function (sy) {
+          add({ k: "backScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
+                x: sx * (W / 2 - 12), y: sy * (H / 2 - 11), z: zHead,
+                g: 14, sz: -110 });
+        });
+      });
+      [-1, 1].forEach(function (sy) {
+        add({ k: "backMagnets", cls: "steel", w: 20, h: 9, d: 4, x: 0,
+              y: sy * (H / 2 - 10), z: zBack - 2, g: 14, sz: -110 });
+      });
+
+      // face screws, into the front of the frame at the corners
+      [-1, 1].forEach(function (sx) {
+        [-1, 1].forEach(function (sy) {
+          add({ k: "faceScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
+                x: sx * (W / 2 - 12), y: sy * (H / 2 - 11),
+                z: zFront + ACRYLIC + HEAD_D / 2, g: 15, sz: 150 });
+        });
+      });
+
+      // Did the generators above actually produce what COUNTS promises? A
+      // mismatch is silent otherwise — the drawing just shows the wrong number
+      // of parts, which is the bug this whole block exists to prevent.
+      Object.keys(COUNTS).forEach(function (k) {
+        var n = PARTS.filter(function (p) { return p.k === k; }).length;
+        if (n !== COUNTS[k]) {
+          console.error("[build-sheet] " + k + ": drew " + n +
+                        ", COUNTS says " + COUNTS[k]);
+        }
+      });
 
       var FACES = ["front", "back", "right", "left", "top", "bottom"];
 
