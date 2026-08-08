@@ -42,7 +42,15 @@ length directly.
 
 Note that `standoff_length` is not that exact length but the nearest stock size
 *below* it, chosen from `STOCK_STANDOFFS`; the difference falls out as
-`panel_recess`. Rounding down is deliberate — a standoff longer than the cavity
-stands the panels proud of the frame and bows the acrylic, whereas a short one
-just leaves them sitting a few millimetres behind it. Quote the stock number in
-the build guide, never the exact one: nobody sells a 48.5 mm standoff.
+`panel_recess`, and `standoff_source` says what to buy. Rounding down is
+deliberate — a standoff longer than the cavity stands the panels proud of the
+frame and bows the acrylic, whereas a short one just leaves them sitting a few
+millimetres behind it. Quote the stock number in the build guide, never the
+exact one: nobody sells a 48.5 mm standoff.
+
+`STOCK_STANDOFFS` currently lists what one Home Depot trip can produce, which
+is why entries past 1 in are stacks of two spacers rather than single parts —
+their nylon spacers stop at 1 in. That is a deliberate trade: ordering M3
+standoffs online would give an exact 48.5 mm in one rigid piece instead of
+44.45 mm in two loose ones. Swapping back is a matter of replacing the tuple;
+the buy list, the recess and the drawings all follow from it.

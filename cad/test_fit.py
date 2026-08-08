@@ -81,8 +81,11 @@ check("standoffs have positive length",
 # the cavity stands the panels proud of the frame, where they press into the
 # acrylic and bow it; a shorter one just leaves them sitting behind it.
 check("the standoff is a size you can buy",
-      c.standoff_length in STOCK_STANDOFFS,
-      f"{c.standoff_length} mm is not in {STOCK_STANDOFFS}")
+      c.standoff_length in [s[0] for s in STOCK_STANDOFFS],
+      f"{c.standoff_length} mm is not a stock length")
+check("the standoff says what to buy",
+      bool(c.standoff_source),
+      "no source recorded for the chosen standoff")
 check("the standoff fits the cavity",
       c.standoff_length <= c.standoff_ideal,
       f"stock {c.standoff_length} mm exceeds the {c.standoff_ideal:.1f} mm cavity — "

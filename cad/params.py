@@ -75,10 +75,25 @@ class Panel:
         return self.pixels_y * self.pitch
 
 
-#: Lengths M3 nylon standoffs are actually sold in, in mm. The panels mount M3,
-#: so these come from the same metric standoff kit as the Pi's M2.5 hardware —
-#: there is no imperial spacer near the length this design wants.
-STOCK_STANDOFFS = (10, 12, 15, 18, 20, 25, 30, 35, 40, 45, 50)
+#: Standoff lengths obtainable in one Home Depot trip, and what to buy for each.
+#:
+#: Their nylon spacers (Everbilt) stop at 1 in, so every length past that is a
+#: stack rather than a part — which is why the source rides along with the
+#: number instead of living in the build guide, where it would drift.
+#:
+#: Ordering M3 standoffs online would give an exact 48.5 mm in one rigid piece,
+#: which is mechanically better; this list is the deliberate trade of that for a
+#: build that needs no shipping. Swapping back means replacing this tuple, and
+#: everything downstream — buy list, recess, drawings — follows.
+STOCK_STANDOFFS = (
+    (12.70, '1/2 in nylon spacer'),
+    (19.05, '3/4 in nylon spacer'),
+    (25.40, '1 in nylon spacer'),
+    (31.75, '1 in + 1/4 in spacers stacked'),
+    (38.10, '1 in + 1/2 in spacers stacked'),
+    (44.45, '1 in + 3/4 in spacers stacked'),
+    (50.80, '2 × 1 in spacers stacked'),
+)
 
 
 @dataclass(frozen=True)
@@ -225,9 +240,18 @@ class Case:
         they are not there for. Too short and the panels simply sit a little
         behind the acrylic instead of touching it, which costs nothing.
         """
-        fits = [s for s in STOCK_STANDOFFS if s <= self.standoff_ideal]
+        return self._standoff[0]
+
+    @property
+    def standoff_source(self):
+        """What to actually buy for `standoff_length` — often two parts."""
+        return self._standoff[1]
+
+    @property
+    def _standoff(self):
+        fits = [s for s in STOCK_STANDOFFS if s[0] <= self.standoff_ideal]
         # Nothing short enough means the cavity is shallower than the shortest
-        # standoff sold. Fall back to that shortest one rather than raising, so
+        # spacer sold. Fall back to that shortest one rather than raising, so
         # `test_fit` still reports every other check instead of a traceback —
         # "the standoff fits the cavity" is the assertion that catches it.
         return max(fits) if fits else min(STOCK_STANDOFFS)
@@ -269,9 +293,10 @@ class Case:
             f"  frame opening       {fraction(self.opening_width)} × {fraction(self.opening_height)}",
             f"  outside             {fraction(self.outer_width)} × {fraction(self.outer_height)}"
             f" × {fraction(self.interior_depth)} deep",
-            f"  panel standoffs     {self.standoff_length:.0f} mm stock"
-            f"  (exact would be {self.standoff_ideal:.1f} mm)",
-            f"  panel sits behind   {self.panel_recess:.1f} mm of the acrylic",
+            f"  panel standoffs     {fraction(self.standoff_length)}"
+            f"  — {self.standoff_source}",
+            f"                      (exact would be {self.standoff_ideal:.1f} mm;"
+            f" panel sits {self.panel_recess:.1f} mm behind the acrylic)",
             f"  cavity behind       {self.cavity_behind_panels:.1f} mm",
             f"  Pi + riser + HAT    {self.electronics.stack_depth:.1f} mm",
             f"  headroom for cable  {self.stack_headroom:.1f} mm",
