@@ -1372,9 +1372,21 @@
       }
       var lastC = null, lastS = 0;
 
-      function orbitBy(dx, dy) {
-        ry += dx * 0.45;
-        rx -= dy * 0.45;
+      // Both gesture paths orbit through here, but they disagree about sign.
+      // A pointer delta is where the hand went: moving right is +x. A wheel
+      // delta is where the *content* was asked to go, which is the opposite —
+      // two fingers moving right reports negative deltaX. Passing wheel deltas
+      // through raw is what made two-finger drag feel inverted on both axes.
+      //
+      // Kept as named constants because the right answer also depends on the
+      // reader's natural-scroll setting, so this is a sign somebody will want to
+      // flip without reading the rest of the file.
+      var DRAG_DIR = 1;    // click/touch drag: delta already follows the hand
+      var WHEEL_DIR = -1;  // trackpad: invert to follow the fingers
+
+      function orbitBy(dx, dy, dir) {
+        ry += dir * dx * 0.45;
+        rx -= dir * dy * 0.45;
         rx = Math.max(-85, Math.min(85, rx));
         apply();
       }
@@ -1390,7 +1402,7 @@
         if (!pts.has(e.pointerId)) { return; }
         pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
         var c = centroid(), s = spread();
-        if (lastC) { orbitBy(c.x - lastC.x, c.y - lastC.y); }
+        if (lastC) { orbitBy(c.x - lastC.x, c.y - lastC.y, DRAG_DIR); }
         if (pts.size > 1 && lastS > 8 && s > 8) { setZoom(zoom * (s / lastS)); }
         lastC = c;
         lastS = s;
@@ -1415,7 +1427,7 @@
         if (e.ctrlKey) {                      // browsers deliver pinch this way
           setZoom(zoom * Math.pow(1.0075, -e.deltaY));
         } else {
-          orbitBy(e.deltaX * 0.32, e.deltaY * 0.32);
+          orbitBy(e.deltaX * 0.32, e.deltaY * 0.32, WHEEL_DIR);
         }
       }, { passive: false });
 
