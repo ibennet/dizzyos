@@ -244,6 +244,7 @@ sed -e "s|{{HOSTNAME}}|$PI_HOSTNAME|g" \
     -e "s|{{SSH_PUBKEY}}|$SSH_PUBKEY|g" \
     -e "s|{{REPO}}|$REPO|g" \
     -e "s|{{REF}}|$REF|g" \
+    -e "s|{{WIFI_COUNTRY}}|$WIFI_COUNTRY|g" \
     "$HERE/pi/firstrun.sh.tmpl" > "$BOOT/firstrun.sh"
 chmod +x "$BOOT/firstrun.sh"
 

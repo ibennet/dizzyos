@@ -58,12 +58,23 @@ method=auto
 NMEOF
 chmod 600 /etc/NetworkManager/system-connections/dizzyos-wifi.nmconnection
 
-# Ship images leave the radio soft-blocked until a country is set; the
-# regulatory domain came in on the kernel command line, so unblock here
-# (same trick rpi-imager's generated firstrun uses).
+# Ship images leave the WiFi radio rfkill-BLOCKED until a wireless country is
+# set — wlan0 stays down and nothing explains why. Setting the country via
+# raspi-config is the supported path and is what makes the unblock persist;
+# the state-file loop alone is not enough, because those files may not exist
+# yet at firstrun time (learned the hard way: a sign that provisioned
+# perfectly and never joined WiFi).
+if [ -x /usr/bin/raspi-config ]; then
+  raspi-config nonint do_wifi_country '{{WIFI_COUNTRY}}' || true
+fi
+shopt -s nullglob
 for f in /var/lib/systemd/rfkill/*:wlan; do
-  [ -e "$f" ] && echo 0 > "$f"
+  echo 0 > "$f"
 done
+shopt -u nullglob
+if command -v rfkill >/dev/null 2>&1; then
+  rfkill unblock wifi || true
+fi
 
 # --- dizzyos payload + bootstrap-on-next-boot -------------------------------
 install -d /opt/dizzyos/payload /etc/dizzyos
