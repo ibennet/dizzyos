@@ -19,6 +19,10 @@ RestartSec=5
 # The kernel touches this while rendering; dizzyos-update reads it as the
 # post-deploy health signal (no heartbeat -> automatic rollback).
 RuntimeDirectory=dizzyos
+# World-writable because rpi-rgb-led-matrix drops privileges to `daemon`
+# once it has grabbed the GPIO, so the render loop is no longer root by the
+# time it writes the heartbeat.
+RuntimeDirectoryMode=0777
 Environment=DIZZYOS_HEARTBEAT=/run/dizzyos/heartbeat
 
 [Install]

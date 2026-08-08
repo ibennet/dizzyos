@@ -107,6 +107,25 @@ def pip_install(release_dir):
                        check=True)
 
 
+def warm_font_cache(release_dir):
+    """Compile the bundled BDF fonts into the release's font cache now, as root.
+
+    At runtime the matrix library drops privileges to `daemon`, so the render
+    loop cannot write into the release tree — a release dir must be complete
+    and read-only by the time the service starts.
+    """
+    subprocess.run(
+        [os.path.join(ROOT, "venv/bin/python"), "-c",
+         "import sys; sys.path.insert(0, '.');"
+         "from kernel.render import FontBook; FontBook('fonts').bitmaps()"],
+        cwd=release_dir, check=False)
+    cache = os.path.join(release_dir, "fonts", ".cache")
+    if os.path.isdir(cache):
+        os.chmod(cache, 0o755)
+        for name in os.listdir(cache):
+            os.chmod(os.path.join(cache, name), 0o644)
+
+
 def flip(name):
     """Atomically point `current` at releases/<name>."""
     tmp = CURRENT + ".tmp"
@@ -204,6 +223,7 @@ def main():
 
     release_dir = fetch_release(repo, ref, tag)
     pip_install(release_dir)
+    warm_font_cache(release_dir)
 
     log(f"flipping {prev or '(none)'} -> {tag}")
     flip_time = time.time()
