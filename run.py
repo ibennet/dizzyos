@@ -25,9 +25,46 @@ from kernel.services import Services
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
-def load_config(path):
+def _read_yaml(path):
     with open(path, "r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle)
+        return yaml.safe_load(handle) or {}
+
+
+def _deep_merge(base, over):
+    """Recursively merge `over` onto `base` (over wins). Dicts merge key by key;
+    everything else — including lists like launcher.rotation — is replaced."""
+    if not (isinstance(base, dict) and isinstance(over, dict)):
+        return over
+    out = dict(base)
+    for key, val in over.items():
+        out[key] = _deep_merge(base.get(key), val) if key in base else val
+    return out
+
+
+def load_config(path):
+    """Load the user config merged over the release's default config.yaml, so a
+    new release's added keys always resolve to a value even against an older
+    user file (user config survives updates but must stay forward-compatible).
+    In dev, `path` IS the repo's config.yaml, so there's nothing to merge over."""
+    user = _read_yaml(path)
+    defaults_path = os.path.join(ROOT, "config.yaml")
+    if (os.path.exists(defaults_path)
+            and os.path.abspath(defaults_path) != os.path.abspath(path)):
+        return _deep_merge(_read_yaml(defaults_path), user)
+    return user
+
+
+def running_version(default):
+    """The tag the sign is actually on — the current-symlink target on the Pi,
+    accurate for tag / main / pin modes — falling back to the compiled-in
+    __version__ (which reads 0.0.0 until the first release is cut)."""
+    link = "/opt/dizzyos/current"
+    try:
+        if os.path.islink(link):
+            return os.path.basename(os.readlink(link))
+    except OSError:
+        pass
+    return default
 
 
 def validate_config(cfg):
@@ -211,7 +248,7 @@ def main():
     from kernel import __version__
     from kernel.launcher import Launcher  # deferred: pulls in the matrix library
     from kernel.netmon import NetworkMonitor
-    from kernel.overlay import OverlayManager
+    from kernel.overlay import OverlayManager, no_wifi_icon
     from kernel.settings import SettingsServer
 
     # System layer first — before the matrix and apps. The status overlays and
@@ -221,13 +258,21 @@ def main():
     fonts = FontBook(os.path.join(ROOT, "fonts"))
     overlays = OverlayManager()
     system = cfg.get("system") or {}
+    netmon = None
     if system.get("network_monitor", True):
-        NetworkMonitor(overlays, log).start()
+        # The monitor publishes state; wiring it to the glyph is done here so the
+        # sensor stays decoupled and apps can read services.net.online too.
+        def on_net_change(online):
+            if online:
+                overlays.hide("no_wifi")
+            else:
+                overlays.show("no_wifi", no_wifi_icon)
+        netmon = NetworkMonitor(log, on_change=on_net_change).start()
     settings_cfg = system.get("settings") or {}
     if settings_cfg.get("enabled", True):
         try:
             SettingsServer(args.config, overlays, fonts, log,
-                           version=__version__,
+                           version=running_version(__version__),
                            port=settings_cfg.get("port", 8080),
                            validate=validate_config).start()
         except OSError as exc:  # port taken (e.g. second dev instance) — not fatal
@@ -242,6 +287,7 @@ def main():
         return
 
     services = build_services(cfg, log, fonts=fonts)
+    services.net = netmon  # apps can read services.net.online (None if disabled)
     apps = select_apps_safe(cfg, args, log)
     log(f"dizzyos up: {display_mod.canvas_size(cfg)} canvas, apps={[a.name for a in apps]}")
     try:

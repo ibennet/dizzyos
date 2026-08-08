@@ -21,12 +21,15 @@ ExecStart=/opt/dizzyos/venv/bin/python /opt/dizzyos/current/run.py --config /etc
 Restart=always
 RestartSec=5
 # The kernel touches this while rendering; dizzyos-update reads it as the
-# post-deploy health signal (no heartbeat -> automatic rollback).
+# post-deploy health signal (no heartbeat -> automatic rollback). That signal
+# is the only thing standing between a bad release and a sign you'd collect by
+# hand, so the directory must NOT be world-writable (a forged heartbeat would
+# defeat the check). Group=daemon + 0770 lets the privilege-dropped render loop
+# (rpi-rgb-led-matrix drops to `daemon` once it has the GPIO) write it via the
+# group, without granting write to everyone.
 RuntimeDirectory=dizzyos
-# World-writable because rpi-rgb-led-matrix drops privileges to `daemon`
-# once it has grabbed the GPIO, so the render loop is no longer root by the
-# time it writes the heartbeat.
-RuntimeDirectoryMode=0777
+RuntimeDirectoryMode=0770
+Group=daemon
 Environment=DIZZYOS_HEARTBEAT=/run/dizzyos/heartbeat
 
 [Install]

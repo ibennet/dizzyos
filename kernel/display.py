@@ -42,7 +42,11 @@ def create_matrix(cfg):
     if IS_HARDWARE:
         options.hardware_mapping = m.get("hardware_mapping", "adafruit-hat")
         options.gpio_slowdown = m.get("gpio_slowdown", 4)
-        options.drop_privileges = m.get("drop_privileges", True)
+        # Always drop privileges — deliberately NOT read from config. config.yaml
+        # is editable from the LAN settings page, so honouring a `drop_privileges`
+        # key there would let one config write keep the render process (and its
+        # HTTP server) root on the next boot.
+        options.drop_privileges = True
         _apply_tuning(options, m)
 
     return RGBMatrix(options=options)

@@ -40,6 +40,12 @@ for i in $(seq 1 60); do
 done
 [ -n "$online" ] || fail "no network after ~5 min"
 
+# WiFi is up (we just reached GitHub), so the plaintext PSK that flash.sh left
+# on the FAT boot partition has done its job — remove it. NetworkManager keeps
+# its own copy (mode 600 on the rootfs) for reconnects. The boot partition has
+# no permissions, so anyone who pulls the card reads whatever is left here.
+rm -f /boot/firmware/network-config
+
 # --- packages ---------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -92,6 +98,17 @@ EOF
 # User config lives OUTSIDE the release dir so updates never clobber it.
 if [ ! -f /etc/dizzyos/config.yaml ]; then
   cp "$ROOT/current/config.yaml" /etc/dizzyos/config.yaml
+fi
+
+# --- privilege helpers for the settings server (which runs as `daemon`) ------
+# Fixed-purpose root helpers + a narrow sudoers rule, so the privilege-dropped
+# render process can restart the service, write the config, and join WiFi
+# without the HTTP server itself ever holding root.
+install -m 755 "$PAYLOAD/write-config" "$PAYLOAD/nmcli-join" "$ROOT/"
+if visudo -cf "$PAYLOAD/020-dizzyos-settings" >/dev/null; then
+  install -m 440 "$PAYLOAD/020-dizzyos-settings" /etc/sudoers.d/020-dizzyos-settings
+else
+  echo "WARNING: sudoers file failed validation; restart/wifi from settings won't work"
 fi
 
 # --- services ---------------------------------------------------------------

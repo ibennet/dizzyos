@@ -8,9 +8,11 @@ loopback port. Exits non-zero on the first failure.
 """
 
 import os
+import re
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from http.cookiejar import CookieJar
 
@@ -67,16 +69,25 @@ check("pin banner expires after its ttl",
       not has_color(overlays.compose(frame()), lambda px: px != (0, 0, 0)))
 
 # --- network monitor --------------------------------------------------------
+# The monitor publishes state via on_change; the overlay wiring lives in the
+# caller (run.py), mirrored here. Debounced: several fails to go offline.
 print("netmon")
 overlays = OverlayManager()
-monitor = NetworkMonitor(overlays, log=lambda m: None, interval=0.01,
-                         probe=lambda: False).start()
+
+
+def on_net(online):
+    overlays.hide("no_wifi") if online else overlays.show("no_wifi", no_wifi_icon)
+
+
+monitor = NetworkMonitor(log=lambda m: None, interval=0.01,
+                         probe=lambda: False, on_change=on_net).start()
 time.sleep(0.3)
-check("offline shows the no-wifi overlay",
+check("consecutive failures go offline and show the icon",
       not monitor.online and "no_wifi" in overlays.active())
 monitor._probe = lambda: True
 time.sleep(0.3)
-check("recovery hides it", monitor.online and "no_wifi" not in overlays.active())
+check("a success comes back online and hides it",
+      monitor.online and "no_wifi" not in overlays.active())
 monitor.stop()
 
 # --- settings server --------------------------------------------------------
@@ -100,30 +111,60 @@ def get(path):
     return http.open(base + path, timeout=10)
 
 
-def post(path, **fields):
+def post(path, opener=None, **fields):
     data = "&".join(f"{k}={urllib.request.quote(v)}" for k, v in fields.items())
     try:
-        return http.open(base + path, data=data.encode(), timeout=10)
+        return (opener or http).open(base + path, data=data.encode(), timeout=10)
     except urllib.error.HTTPError as exc:
         return exc
 
 
-page = get("/").read().decode()
-check("unauthenticated page asks for the PIN", "PIN" in page)
-check("opening the page puts the PIN on the sign", "setup_pin" in overlays.active())
+def status_for_host(host):
+    req = urllib.request.Request(base + "/", headers={"Host": host})
+    try:
+        return http.open(req, timeout=10).status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+landing = get("/").read().decode()
+check("unauthenticated landing offers the PIN button", "show PIN" in landing)
+check("a bare GET does NOT put a PIN on the sign", "setup_pin" not in overlays.active())
+
+# The Host-header guard (DNS-rebinding defence) rejects a foreign Host.
+check("a foreign Host header is rejected", status_for_host("evil.example") == 403)
+
+# Issuing the PIN is a POST behind the button.
+post("/pin")
+check("requesting the PIN puts it on the sign", "setup_pin" in overlays.active())
 
 pin = server._pin[0]
-check("wrong PIN is rejected", post("/auth", pin="0000" if pin != "0000" else "9999").code == 403)
-check("right PIN grants a session", "config.yaml" in post("/auth", pin=pin).read().decode())
+bad_pin = "000000" if pin != "000000" else "999999"
+check("wrong PIN is rejected", post("/auth", pin=bad_pin).code == 403)
+authed = post("/auth", pin=pin).read().decode()
+check("right PIN grants a session", "config.yaml" in authed)
+
+csrf = re.search(r'name="csrf" value="([^"]+)"', authed).group(1)
+
+# A session from another device (no cookie) can't write.
+nocookie = urllib.request.build_opener()  # no CookieProcessor
+before = open(cfg_path, encoding="utf-8").read()
+post("/config", opener=nocookie, csrf=csrf, config="matrix:\n  rows: 8\n  cols: 8\n")
+check("POST without a session cookie does not write",
+      open(cfg_path, encoding="utf-8").read() == before)
+
+# A valid session but a missing/wrong CSRF token is refused.
+check("POST without a CSRF token is refused",
+      post("/config", config="matrix:\n  rows: 8\n  cols: 8\n").code == 403)
 
 # post() follows the redirect back to the settings page, which carries the
 # one-shot status message — read it off that response.
-bad = post("/config", config=": not yaml : [")
+bad = post("/config", csrf=csrf, config=": not yaml : [")
 check("invalid YAML is refused", "not saved" in bad.read().decode())
 with open(cfg_path, encoding="utf-8") as fh:
     check("refused YAML did not touch the file", "rows: 64" in fh.read())
 
-post("/config", config="matrix:\n  rows: 32\n  cols: 32\n")
+post("/config", csrf=csrf, config="matrix:\n  rows: 32\n  cols: 32\n")
 with open(cfg_path, encoding="utf-8") as fh:
     check("valid YAML is written", "rows: 32" in fh.read())
 check("save triggers a restart", restarts == [1])

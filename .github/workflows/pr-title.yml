@@ -37,6 +37,9 @@ jobs:
             kernel
             apps
             tools
+            tooling
+            cad
+            dev
             fonts
             docs
             ci

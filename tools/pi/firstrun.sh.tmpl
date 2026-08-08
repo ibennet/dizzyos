@@ -2,7 +2,11 @@
 # dizzyos first-boot provisioning. Template — tools/flash.sh fills the
 # {{PLACEHOLDERS}} and drops the result on the boot partition; the kernel
 # command line runs it once (systemd.run, before normal boot), it configures
-# the system, erases its own secrets, and reboots into a normal boot.
+# the system, then unlinks itself and reboots into a normal boot.
+#
+# Note: `rm` on the FAT boot partition only unlinks — it does not overwrite, so
+# the plaintext blocks may linger until reused. Treat a flashed card as carrying
+# the WiFi PSK until bootstrap removes network-config after first association.
 #
 # Runs as root with the rootfs mounted rw but almost no services up — so
 # everything here is plain file writes, no systemctl start / dbus.
@@ -99,9 +103,9 @@ fi
 
 # --- dizzyos payload + bootstrap-on-next-boot -------------------------------
 install -d /opt/dizzyos/payload /etc/dizzyos
-cp "$BOOT"/dizzyos/bootstrap.sh "$BOOT"/dizzyos/dizzyos-update /opt/dizzyos/payload/
-cp "$BOOT"/dizzyos/*.service "$BOOT"/dizzyos/*.timer /opt/dizzyos/payload/
-chmod +x /opt/dizzyos/payload/bootstrap.sh /opt/dizzyos/payload/dizzyos-update
+cp "$BOOT"/dizzyos/* /opt/dizzyos/payload/
+chmod +x /opt/dizzyos/payload/bootstrap.sh /opt/dizzyos/payload/dizzyos-update \
+  /opt/dizzyos/payload/write-config /opt/dizzyos/payload/nmcli-join
 echo 'REPO={{REPO}}' > /etc/dizzyos/update.conf
 # A branch pin (flash.sh --ref) makes the updater track that branch instead
 # of releases — dev/testing only; delete the REF line to return to releases.

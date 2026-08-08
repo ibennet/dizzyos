@@ -19,6 +19,9 @@ echo "==> byte-compiling"
 echo "==> smoke test"
 "$PYTHON" dev/smoke.py
 
+echo "==> updater state-machine test"
+"$PYTHON" dev/smoke_update.py
+
 echo "==> enclosure fit checks"
 "$PYTHON" cad/test_fit.py
 

@@ -77,8 +77,34 @@ def current_tag():
     return None
 
 
+def resolve_sha(repo, ref_name):
+    """Resolve a tag or branch to the commit SHA it currently points at (derefs
+    annotated tags). Fetching by SHA makes a release immutable: a re-cut tag
+    can't silently hand two signs different code under one version string."""
+    return http_json(f"https://api.github.com/repos/{repo}/commits/{ref_name}")["sha"]
+
+
+def _safe_extract(tar, dest):
+    """Extract with the stdlib 'data' filter (py3.12+: blocks path traversal,
+    symlink/hardlink escapes, device nodes, setuid). On py3.11 (no filter=),
+    fall back to a manual check that covers names *and* link targets and rejects
+    special members — all of this runs as root, so it matters."""
+    try:
+        tar.extractall(dest, filter="data")
+    except TypeError:  # py3.11: extractall() has no filter= yet
+        for m in tar.getmembers():
+            for attr in (m.name, m.linkname):
+                if attr and (attr.startswith(("/", "..")) or ".." in attr.split("/")):
+                    raise RuntimeError(f"unsafe tar member: {m.name} -> {attr}")
+            if m.isdev() or m.issym() or m.islnk():
+                raise RuntimeError(f"unsafe tar member type: {m.name}")
+        tar.extractall(dest)
+
+
 def fetch_release(repo, ref, name):
-    """Download + unpack a source tarball into releases/<name>. Idempotent."""
+    """Download + unpack a source tarball into releases/<name>. Idempotent.
+    `ref` is whatever names the archive — a resolved SHA when we could reach the
+    API, else the symbolic ref."""
     dest = os.path.join(RELEASES, name)
     if os.path.isdir(dest):
         return dest
@@ -90,15 +116,13 @@ def fetch_release(repo, ref, name):
         with urllib.request.urlopen(url, timeout=120) as resp, open(tar_path, "wb") as out:
             shutil.copyfileobj(resp, out)
         with tarfile.open(tar_path) as tar:
-            members = tar.getmembers()
-            for m in members:  # refuse path traversal
-                if m.name.startswith(("/", "..")) or ".." in m.name.split("/"):
-                    raise RuntimeError(f"unsafe tar member: {m.name}")
-            tar.extractall(tmp)
+            _safe_extract(tar, tmp)
         # GitHub tarballs unpack to a single "<repo>-<ref>/" top dir.
         top = next(d for d in os.listdir(tmp)
                    if os.path.isdir(os.path.join(tmp, d)) and d != "__MACOSX")
         os.rename(os.path.join(tmp, top), dest)
+    with open(os.path.join(dest, ".release-ref"), "w", encoding="utf-8") as fh:
+        fh.write(ref)  # the exact ref/SHA this tree was built from
     return dest
 
 
@@ -165,10 +189,33 @@ def healthy():
     return False
 
 
+def sweep_orphans():
+    """Remove leftover download staging dirs (TemporaryDirectory names start
+    'tmp') from an interrupted fetch. Left in place they'd both eat SD space and
+    count against prune's retention, which could delete the rollback target."""
+    if not os.path.isdir(RELEASES):
+        return
+    for d in os.listdir(RELEASES):
+        path = os.path.join(RELEASES, d)
+        if d.startswith("tmp") and os.path.isdir(path):
+            log(f"sweeping orphan staging dir {d}")
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def have_space(min_mb=150):
+    """Guard a download against a full SD card (a failed pip mid-deploy is worse
+    than skipping tonight's update)."""
+    try:
+        return shutil.disk_usage(RELEASES).free > min_mb * 1024 * 1024
+    except OSError:
+        return True
+
+
 def prune():
     keep = {current_tag()}
     tags = sorted((d for d in os.listdir(RELEASES)
-                   if os.path.isdir(os.path.join(RELEASES, d))),
+                   if os.path.isdir(os.path.join(RELEASES, d))
+                   and not d.startswith("tmp")),  # never count staging dirs
                   key=lambda d: os.path.getmtime(os.path.join(RELEASES, d)),
                   reverse=True)
     for tag in tags[KEEP + 1:]:
@@ -228,20 +275,21 @@ def reconcile_pending():
 
 
 def refresh_payload(release_dir):
-    """A release may ship a newer updater/units; stage them for next time."""
+    """Stage the newest platform scripts into payload so a *re-bootstrap* uses
+    them. This does NOT hot-apply anything: the timer runs the updater from the
+    release tree (current/), and systemd units / sudo helpers are installed once
+    by bootstrap.sh — changing those still needs a re-bootstrap or re-flash (see
+    ADR 0002). We deliberately don't copy units here, which never took effect and
+    only implied otherwise."""
     src = os.path.join(release_dir, "tools", "pi")
     if not os.path.isdir(src):
         return
     payload = os.path.join(ROOT, "payload")
-    for fname in ("dizzyos-update", "bootstrap.sh"):
+    for fname in ("dizzyos-update", "bootstrap.sh", "write-config", "nmcli-join"):
         path = os.path.join(src, fname)
         if os.path.exists(path):
             shutil.copy2(path, payload)
             os.chmod(os.path.join(payload, fname), 0o755)
-    sysd = os.path.join(src, "systemd")
-    if os.path.isdir(sysd):
-        for fname in os.listdir(sysd):
-            shutil.copy2(os.path.join(sysd, fname), payload)
 
 
 def main():
@@ -250,9 +298,11 @@ def main():
     values = conf()
     repo = values["REPO"]
 
-    # First, recover any deploy that a power loss interrupted mid-flip.
+    # First, recover any deploy that a power loss interrupted mid-flip, and
+    # clear staging dirs left by an interrupted download.
     if os.path.isdir(RELEASES):
         reconcile_pending()
+        sweep_orphans()
 
     if values.get("REF"):
         # Dev pin: REF=<branch> in update.conf installs that branch instead
@@ -261,7 +311,8 @@ def main():
         # re-run to return to release tracking. --force refetches the
         # branch tip.
         branch = values["REF"]
-        tag, ref = "pin-" + branch.replace("/", "-"), f"refs/heads/{branch}"
+        tag, symbolic, fallback_ref = ("pin-" + branch.replace("/", "-"),
+                                       branch, f"refs/heads/{branch}")
         log(f"pinned to branch {branch} (REF in {CONF})")
         pinned = os.path.join(RELEASES, tag)
         if force and os.path.isdir(pinned):
@@ -274,9 +325,9 @@ def main():
                 return 0
             # Bootstrap before the first release exists: track main directly.
             log("no releases yet — installing from the main branch")
-            tag, ref = "main", "refs/heads/main"
+            tag, symbolic, fallback_ref = "main", "main", "refs/heads/main"
         else:
-            ref = f"refs/tags/{tag}"
+            symbolic, fallback_ref = tag, f"refs/tags/{tag}"
 
     prev = current_tag()
     if tag == prev and not force:
@@ -285,6 +336,20 @@ def main():
     if os.path.exists(os.path.join(RELEASES, tag + ".bad")) and not force:
         log(f"{tag} is marked bad from a failed deploy; skipping (--force to retry)")
         return 0
+
+    if not have_space():
+        log("low on disk — skipping this update rather than risk a half-deploy")
+        return 1
+
+    # Pin to the commit the tag/branch points at *now*, so the fetched content
+    # is immutable even if the tag is later re-cut. Fall back to the symbolic
+    # ref if the API is unreachable.
+    try:
+        ref = resolve_sha(repo, symbolic)
+        log(f"resolved {symbolic} -> {ref[:12]}")
+    except Exception as exc:  # noqa: BLE001 - degrade to the symbolic ref
+        log(f"could not resolve {symbolic} to a SHA ({exc}); fetching by ref")
+        ref = fallback_ref
 
     release_dir = fetch_release(repo, ref, tag)
     pip_install(release_dir)

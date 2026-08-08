@@ -13,8 +13,14 @@
 # to store, and the tag is the single source of truth for what a sign is running.
 name: release-please
 
+# Gated on a green `check`: fire only after the check workflow completes
+# successfully on main, so a red main can never tag a release that every sign
+# then fetches on the nightly timer. (Merging the release PR is itself a push to
+# main, which runs check again before this can re-fire.)
 on:
-  push:
+  workflow_run:
+    workflows: [check]
+    types: [completed]
     branches: [main]
 
 permissions:
@@ -24,6 +30,7 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: googleapis/release-please-action@v4
         with:

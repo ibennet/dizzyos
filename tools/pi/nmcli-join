@@ -1,0 +1,14 @@
+#!/bin/bash
+# dizzyos: narrow WiFi-join helper invoked via sudo by the settings server.
+#
+# Exactly one operation. SSID ($1) and password ($2) arrive as argv, never a
+# shell string, so there is no injection surface. The sudoers rule allows
+# `daemon` to run this and nothing else nmcli-related.
+set -eu
+
+if [ "$#" -ne 2 ]; then
+  echo "usage: nmcli-join <ssid> <password>" >&2
+  exit 2
+fi
+
+exec nmcli device wifi connect "$1" password "$2"

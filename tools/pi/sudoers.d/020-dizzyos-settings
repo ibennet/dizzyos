@@ -1,0 +1,8 @@
+# dizzyos: the settings server runs as `daemon` (the matrix library drops
+# privileges to it once it has the GPIO), so grant that user exactly the three
+# root operations the LAN settings page needs — nothing wildcarded, each a
+# fixed command or fixed-purpose helper.
+#
+# Installed to /etc/sudoers.d/020-dizzyos-settings by bootstrap.sh (mode 440,
+# validated with `visudo -c` before it is put in place).
+daemon ALL=(root) NOPASSWD: /usr/bin/systemctl restart dizzyos, /opt/dizzyos/write-config, /opt/dizzyos/nmcli-join
