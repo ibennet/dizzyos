@@ -320,10 +320,35 @@ else:
             ("backMagnets", c.back_magnets, "mid-span on the long sides"),
             ("frameScrews", c.frame_corner_screws, "two per frame corner"),
             ("faceScrews", c.face_screws, "one per corner of the face"),
-            ("hangers", c.hanger_count, "a pair, so it hangs level")):
+            ("hangers", c.hanger_count, "a pair, so it hangs level"),
+            ("hangerScrews", c.hanger_screws, "each hanger is screwed down too"),
+            ("magnetScrews", c.magnet_screws, "so is each magnetic catch")):
         check(f"drawing shows {want} {key}",
               counts.get(key) == want,
               f"drawing declares {counts.get(key)}, design needs {want} — {why}")
+
+    # Every screw class summed, against the derived total. Catches a whole
+    # category being left out of the drawing rather than merely miscounted.
+    drawn = sum(counts.get(k, 0) for k in
+                ("frameScrews", "panelScrews", "piScrews", "backScrews",
+                 "faceScrews", "hangerScrews", "magnetScrews"))
+    check(f"drawing shows all {c.total_screws} screws",
+          drawn == c.total_screws,
+          f"drawing declares {drawn} screws, the build drives {c.total_screws}")
+
+    # The long caption under the drawing was replaced by labels inside it, so
+    # the labels are now the only thing naming the parts. A label pinned to a
+    # stage that never arrives names something the reader cannot see.
+    lblock = re.search(r"var LABELS = \[(.*?)\];", sheet, re.S)
+    labels = re.findall(r'\{ t: "([^"]+)",[^}]*?g: (\d+)',
+                        lblock.group(1)) if lblock else []
+    check("the drawing labels its parts",
+          len(labels) >= 8,
+          f"only {len(labels)} labels on a drawing of {c.total_screws + 30}+ parts")
+    stray = [t for t, g in labels if not (1 <= int(g) <= top_part)]
+    check("every label appears with a stage that exists",
+          not stray,
+          f"label(s) {stray} sit outside stages 1-{top_part}")
 
     # A stage nothing happens in is a stretch of text with a frozen drawing —
     # the thing this whole animation exists to avoid.

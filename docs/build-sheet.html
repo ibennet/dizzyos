@@ -226,9 +226,43 @@
      Boxes built from CSS 3D transforms — no library, which matters because the
      artifact CSP blocks external scripts. Faces are translucent so you can read
      the stack through the case, which is the whole point of the drawing. */
+  /* Labels ride in the 3D scene so each one stays attached to its part as you
+     rotate, but counter-rotate by the scene's own angles so the text always
+     faces you, and counter-scale by --fit so it stays legible when the model is
+     shrunk to fit. Reading --rx/--ry/--fit works because they are custom
+     properties set on the stage and scene, so they inherit down here. */
+  .lbl3d {
+    position: absolute;
+    left: 0; top: 0;
+    white-space: nowrap;
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--rule-strong);
+    padding: .12rem .34rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    transform:
+      translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0))
+      rotateY(calc(-1 * var(--ry, 0deg)))
+      rotateX(calc(-1 * var(--rx, 0deg)))
+      scale(calc(1 / var(--fit, 1)))
+      translate(-50%, -50%);
+  }
+  .lbl3d.in { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .lbl3d { transition: none; } }
+
   .stage {
     perspective: 1500px;
-    height: clamp(300px, 46vh, 460px);
+    /* Taller than it was: the labels replaced a long caption, so the drawing
+       gets that space back. */
+    height: clamp(360px, 62vh, 640px);
     display: grid; place-items: center;
     cursor: grab; touch-action: none; overflow: hidden;
     background: var(--sunk); border: 1px solid var(--rule);
@@ -668,17 +702,7 @@
           </g>
         </svg>
       </div>
-      <figcaption><b>Scroll the steps — the parts arrive as you reach them.</b> Every dimension is
-        the real one from <code>cad/params.py</code>, so the model and the cut list cannot drift
-        apart. Every part in the build is here — 62 of them, down to all eight panel spacers and
-        the screws through each one, so what you see is what you bought. Wood is brown, LED panels
-        blue, the Pi and HAT amber (the HAT is the paler one; it waits off to the side until you
-        have soldered it, then joins the stack), ribbon, riser and power cable grey, fasteners
-        dark steel, the acrylic face teal, and the keyhole hangers on the back at the very end.
-        <br><br>
-        Screw heads are drawn several times over size — at true scale an M3 head is under 6 mm
-        against a 425 mm case, which is honest and invisible.</figcaption>
-      </figure>
+     </figure>
      </div>
 
     <ol class="steps">
@@ -1005,7 +1029,9 @@
         backScrews: 4,      // the corners: the shear path
         backMagnets: 2,
         faceScrews: 4,
-        hangers: 2
+        hangers: 2,
+        hangerScrews: 4,    // 2 per hanger
+        magnetScrews: 4     // 2 per catch
       };
 
       // Screw heads are drawn a few times over size. At true scale an M3 head
@@ -1078,6 +1104,22 @@
         });
       });
 
+      // the small screws through each hanger, and through each magnetic catch
+      [-130, 130].forEach(function (cx) {
+        [-12, 12].forEach(function (dx) {
+          add({ k: "hangerScrews", cls: "screw", w: 5, h: 5, d: 2.6,
+                x: cx + dx, y: (H - T) / 2 - 26, z: zBack - BACK - 2.2,
+                g: 16, sz: -120 });
+        });
+      });
+      [-1, 1].forEach(function (sy) {
+        [-13, 13].forEach(function (dx) {
+          add({ k: "magnetScrews", cls: "screw", w: 5, h: 5, d: 3,
+                x: dx, y: sy * (H / 2 - 10), z: zBack - 2.4,
+                g: 14, sz: -110 });
+        });
+      });
+
       // Did the generators above actually produce what COUNTS promises? A
       // mismatch is silent otherwise — the drawing just shows the wrong number
       // of parts, which is the bug this whole block exists to prevent.
@@ -1087,6 +1129,32 @@
           console.error("[build-sheet] " + k + ": drew " + n +
                         ", COUNTS says " + COUNTS[k]);
         }
+      });
+
+      // One label per thing worth naming, anchored just outside the case so it
+      // does not sit on top of the geometry. y is up, as everywhere in this
+      // table. Each appears with the stage that introduces its part.
+      var LX = W / 2 + 62, LY = H / 2 + 34;
+      var LABELS = [
+        { t: "1×3 frame",        x: -LX, y: 72,  z: 0,             g: 1 },
+        { t: "ribbon cables",    x: -LX, y: 0,   z: 8,             g: 11 },
+        { t: "1¾ in spacers ×8", x: -LX, y: -72, z: zBack + STANDOFF / 2, g: 7 },
+        { t: "¼ in plywood back", x: LX, y: 72,  z: zBack - BACK,  g: 6 },
+        { t: "matrix HAT",        x: LX, y: 0,   z: -2.2,          g: 5 },
+        { t: "Raspberry Pi",      x: LX, y: -72, z: -20.4,         g: 10 },
+        { t: "acrylic face",     x: -95, y: LY,  z: zFront + 20,   g: 13 },
+        { t: "keyhole hangers",  x: 95,  y: LY,  z: zBack - 30,    g: 16 },
+        { t: "64×64 panels ×2",  x: 0,   y: -LY, z: zPanel,        g: 8 }
+      ];
+      var labelEls = LABELS.map(function (L) {
+        var el = document.createElement("div");
+        el.className = "lbl3d";
+        el.textContent = L.t;
+        el.style.setProperty("--lx", L.x + "px");
+        el.style.setProperty("--ly", (-L.y) + "px");
+        el.style.setProperty("--lz", L.z + "px");
+        scene.appendChild(el);
+        return el;
       });
 
       var FACES = ["front", "back", "right", "left", "top", "bottom"];
@@ -1134,18 +1202,29 @@
           var x = p.x + off[0];
           var y = p.y + off[1];
           var z = p.z + off[2];
+          // CSS y grows downward; the parts table reads y as up, so the
+          // top rail is y positive. Without this negation the keyhole hangers
+          // render along the bottom edge and the cord exits through the top.
           boxes[i].style.transform =
-            "translate3d(" + x + "px," + y + "px," + z + "px)";
+            "translate3d(" + x + "px," + (-y) + "px," + z + "px)";
           boxes[i].style.opacity = visible ? "1" : "0";
+        });
+        LABELS.forEach(function (L, i) {
+          labelEls[i].classList.toggle("in", stage >= L.g);
         });
       }
 
-      // Fit the model to the stage; the case is 425 mm across and the drawing
-      // needs room to rotate without clipping.
+      // Fit the model to the stage. Padded generously on both axes now: the
+      // labels sit outside the case, so the thing being fitted is wider and
+      // taller than the case itself, and the stage clips whatever overflows.
+      // Height is checked too — the taller stage made vertical clipping the
+      // binding constraint at narrow widths.
       function fit() {
-        var pad = 1.45;
+        var padW = 1.95, padH = 1.75;
         stage.style.setProperty("--fit",
-          Math.min(1, stage.clientWidth / (W * pad)).toFixed(3));
+          Math.min(1,
+                   stage.clientWidth / (W * padW),
+                   stage.clientHeight / (H * padH)).toFixed(3));
       }
 
       stage.hidden = false;

@@ -416,6 +416,30 @@ class Case:
     #: They contribute nothing structural; they only close the gap.
     back_magnets: int = 2
 
+    #: Small screws holding each hanger and each magnetic catch down. Easy to
+    #: forget when counting, and you are driving them either way.
+    screws_per_hanger: int = 2
+    screws_per_magnet: int = 2
+
+    @property
+    def hanger_screws(self):
+        return self.hanger_count * self.screws_per_hanger
+
+    @property
+    def magnet_screws(self):
+        return self.back_magnets * self.screws_per_magnet
+
+    @property
+    def total_screws(self):
+        """Every screw you drive into the sign itself.
+
+        Excludes the two that go into the wall — those hold the wall, not the
+        sign, and you buy them with the anchors.
+        """
+        return (self.frame_corner_screws + self.spacers_needed
+                + self.electronics.pi_mount_holes + self.back_corner_screws
+                + self.face_screws + self.hanger_screws + self.magnet_screws)
+
     @property
     def back_fixings(self):
         """Every point holding the back board on."""
@@ -511,6 +535,8 @@ class Case:
             f"  hang it on          {self.hanger[0]} (rated {self.hanger[1]:.0f} kg)",
             f"  back held by        {self.back_corner_screws} corner screws"
             f" + {self.back_magnets} magnets — undo {self.opening_fasteners} to open",
+            f"  screws in total     {self.total_screws}"
+            f"  (plus {self.electronics.pi_mount_holes} nuts, and 2 into the wall)",
             f"  panel screws        M3 × {self.panel_screw_length:.0f} mm"
             f"  ({self.panel_screw_engagement:.1f} mm into a"
             f" {self.panel.mount_thread_depth:.0f} mm inlet)",
