@@ -34,6 +34,12 @@ chown '{{USERNAME}}:{{USERNAME}}' "$USER_HOME/.ssh/authorized_keys"
 chmod 600 "$USER_HOME/.ssh/authorized_keys"
 systemctl enable ssh
 
+# Passwordless sudo: Trixie no longer grants it to the first user the way
+# older Raspberry Pi OS did, and the updater / settings page both need root
+# non-interactively (systemctl restart, nmcli connect).
+echo '{{USERNAME}} ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/010-dizzyos-nopasswd
+chmod 440 /etc/sudoers.d/010-dizzyos-nopasswd
+
 # --- WiFi (NetworkManager — Bookworm no longer reads wpa_supplicant.conf) ---
 install -d -m 700 /etc/NetworkManager/system-connections
 cat > /etc/NetworkManager/system-connections/dizzyos-wifi.nmconnection <<'NMEOF'

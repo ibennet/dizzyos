@@ -30,15 +30,20 @@ apt-get install -y --no-install-recommends \
 
 # --- venv (shared across releases; platform-managed) ------------------------
 [ -d "$ROOT/venv" ] || python3 -m venv "$ROOT/venv"
-"$ROOT/venv/bin/pip" install --upgrade pip wheel
+# Cython is a build-time requirement of the matrix bindings below.
+"$ROOT/venv/bin/pip" install --upgrade pip wheel Cython
 
 # --- compiled matrix driver (the reason releases carry no artifacts:
 #     the only compiled piece is built right here, once) ---------------------
 if ! "$ROOT/venv/bin/python" -c 'import rgbmatrix' 2>/dev/null; then
-  [ -d "$ROOT/rpi-rgb-led-matrix" ] || \
-    git clone --depth 1 https://github.com/hzeller/rpi-rgb-led-matrix "$ROOT/rpi-rgb-led-matrix"
-  make -C "$ROOT/rpi-rgb-led-matrix" build-python PYTHON="$ROOT/venv/bin/python"
-  "$ROOT/venv/bin/pip" install "$ROOT/rpi-rgb-led-matrix/bindings/python"
+  SRC=$ROOT/rpi-rgb-led-matrix
+  [ -d "$SRC" ] || git clone --depth 1 https://github.com/hzeller/rpi-rgb-led-matrix "$SRC"
+  # librgbmatrix first, then the bindings against it. build-python/
+  # install-python are targets of bindings/python/Makefile — the repo root
+  # Makefile has no such target.
+  make -C "$SRC/lib"
+  make -C "$SRC/bindings/python" build-python PYTHON="$ROOT/venv/bin/python"
+  make -C "$SRC/bindings/python" install-python PYTHON="$ROOT/venv/bin/python"
 fi
 
 # --- first dizzyos release --------------------------------------------------
