@@ -109,6 +109,15 @@ STOCK_M3_SCREWS = (6, 8, 10, 12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70)
 #: diameter the threads strip out of a soft insert before the joint is tight.
 MIN_THREAD_ENGAGEMENT = 3.0
 
+#: M2.5 machine screw lengths Home Depot actually stocks, in mm. Shorter than
+#: the M3 range because these are a specialty size for them — which is the
+#: constraint, not the thread: they have the screws and the nuts, just not the
+#: threaded standoffs an electronics shop would sell you.
+STOCK_M25_SCREWS = (4, 5, 6, 10, 20)
+
+#: A nut needs about its own height of thread through it to pull up tight.
+MIN_NUT_ENGAGEMENT = 2.0
+
 
 @dataclass(frozen=True)
 class Stock:
@@ -131,9 +140,13 @@ class Electronics:
 
     pi_width: float = 85.0
     pi_length: float = 56.0
-    #: M2.5 standoffs holding the Pi off the back board.
-    pi_standoff: float = 6.0
+    #: A 1/4 in nylon spacer holding the Pi off the back board. Not a threaded
+    #: standoff: the Pi's holes are plain through-holes, so the same screw-
+    #: spacer-nut sandwich as the panels works, out of the same aisle.
+    pi_standoff: float = 0.25 * MM_PER_INCH
     pi_pcb: float = 1.4
+    #: Mounting holes on a Pi, all four of which want a spacer.
+    pi_mount_holes: int = 4
     #: 2×20 stacking header. Present because the HAT fouls the Pi's port cans
     #: without it — that is what it is for, not a nicety.
     riser: float = 15.0
@@ -302,6 +315,25 @@ class Case:
         return self.panel_screw_length - self.panel_screw_span
 
     @property
+    def pi_screw_span(self):
+        """Back board, spacer and Pi board — everything the nut has to clear."""
+        return (self.stock.back_thickness + self.electronics.pi_standoff
+                + self.electronics.pi_pcb)
+
+    @property
+    def pi_screw_length(self):
+        """Shortest stock M2.5 leaving enough thread proud to take a nut.
+
+        Unlike the panel screws there is no bottoming out to worry about — the
+        Pi's holes go straight through, so overshooting only leaves thread
+        sticking up. Hence shortest-that-works rather than a window.
+        """
+        fits = [s for s in STOCK_M25_SCREWS
+                if s >= self.pi_screw_span + MIN_NUT_ENGAGEMENT]
+        # Nothing long enough: "a stock M2.5 screw clears the Pi stack" says so.
+        return min(fits) if fits else max(STOCK_M25_SCREWS)
+
+    @property
     def spacers_needed(self):
         """Total spacer stacks, one per mounting hole across every panel."""
         return self.panel.mount_holes * self.panels_x * self.panels_y
@@ -347,6 +379,8 @@ class Case:
             f"  panel screws        M3 × {self.panel_screw_length:.0f} mm"
             f"  ({self.panel_screw_engagement:.1f} mm into a"
             f" {self.panel.mount_thread_depth:.0f} mm inlet)",
+            f"  Pi screws           M2.5 × {self.pi_screw_length:.0f} mm"
+            f"  + nut, over a {fraction(self.electronics.pi_standoff)} spacer",
             f"  cavity behind       {self.cavity_behind_panels:.1f} mm",
             f"  Pi + riser + HAT    {self.electronics.stack_depth:.1f} mm",
             f"  headroom for cable  {self.stack_headroom:.1f} mm",

@@ -15,7 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cad.params import (CASE, MIN_THREAD_ENGAGEMENT, STOCK_STANDOFFS,  # noqa: E402
+from cad.params import (CASE, MIN_NUT_ENGAGEMENT,  # noqa: E402
+                        MIN_THREAD_ENGAGEMENT, STOCK_STANDOFFS,
                         fraction, inches)
 
 passed = 0
@@ -119,6 +120,12 @@ check("the screw clears the back board and spacers",
       c.panel_screw_length > c.panel_screw_span,
       f"M3 × {c.panel_screw_length:.0f} mm cannot cross "
       f"{c.panel_screw_span:.1f} mm of back board and spacers")
+# The Pi is the same sandwich but with a nut on top, since its holes go through.
+check("a stock M2.5 screw clears the Pi stack",
+      c.pi_screw_length >= c.pi_screw_span + MIN_NUT_ENGAGEMENT,
+      f"M2.5 × {c.pi_screw_length:.0f} mm leaves "
+      f"{c.pi_screw_length - c.pi_screw_span:.1f} mm proud of a "
+      f"{c.pi_screw_span:.1f} mm stack — not enough to start a nut")
 
 print("material yield")
 check("frame comes out of one board",
