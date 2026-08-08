@@ -39,9 +39,20 @@ check("panels fit the opening width",
 check("panels fit the opening height",
       c.opening_height >= c.panels_height,
       f"opening {c.opening_height:.1f} < panels {c.panels_height:.1f} mm")
-check("clearance is present but not sloppy",
-      0 < c.clearance <= 6,
-      f"clearance {c.clearance} mm — under 6 mm or the panels wander")
+check("clearance survives rounding to the cut grid",
+      2 <= c.actual_clearance_x <= 8 and 2 <= c.actual_clearance_y <= 8,
+      f"x {c.actual_clearance_x:.2f} mm, y {c.actual_clearance_y:.2f} mm — want 2-8 mm")
+
+# The cut desk works in eighths. Anything finer is a number they cannot hit and
+# you cannot check, so every wood dimension must land on the grid exactly.
+for label, value in (("opening width", c.opening_width),
+                     ("opening height", c.opening_height),
+                     ("rail length", c.rail_length),
+                     ("stile length", c.stile_length)):
+    eighths = inches(value) * 8
+    check(f"{label} lands on the cut grid",
+          abs(eighths - round(eighths)) < 1e-6,
+          f"{inches(value):.4f} in is not a whole eighth")
 
 print("depth stack")
 # The standoffs set panel face flush with the acrylic. A negative or zero value

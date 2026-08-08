@@ -14,14 +14,27 @@ so one of them has to convert, and it may as well be the one sold in round
 fractions. `inches()` renders values back for the hardware store.
 """
 
+import math
 from dataclasses import dataclass
 
 MM_PER_INCH = 25.4
+
+#: Cut dimensions round UP to this fraction of an inch. A hardware-store panel
+#: saw holds about an eighth; specifying sixteenths asks for precision the cut
+#: desk cannot deliver and you cannot verify, and it turns every dimension into
+#: an awkward number for someone reading a tape measure. Rounding up rather than
+#: to-nearest means the opening only ever grows, so the panels always still fit.
+CUT_GRID = 8
 
 
 def inches(mm):
     """Millimetres as a decimal-inch float."""
     return mm / MM_PER_INCH
+
+
+def snap_up(mm, denominator=CUT_GRID):
+    """Round `mm` up to the next 1/`denominator` inch, returned in mm."""
+    return math.ceil(inches(mm) * denominator) / denominator * MM_PER_INCH
 
 
 def fraction(mm, denominator=16):
@@ -126,11 +139,20 @@ class Case:
     # --- the frame --------------------------------------------------------
     @property
     def opening_width(self):
-        return self.panels_width + self.clearance
+        return snap_up(self.panels_width + self.clearance)
 
     @property
     def opening_height(self):
-        return self.panels_height + self.clearance
+        return snap_up(self.panels_height + self.clearance)
+
+    @property
+    def actual_clearance_x(self):
+        """Slack the snapped opening really leaves, across the panels."""
+        return self.opening_width - self.panels_width
+
+    @property
+    def actual_clearance_y(self):
+        return self.opening_height - self.panels_height
 
     @property
     def outer_width(self):
