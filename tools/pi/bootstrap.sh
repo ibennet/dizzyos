@@ -37,14 +37,36 @@ apt-get install -y --no-install-recommends \
 #     the only compiled piece is built right here, once) ---------------------
 if ! "$ROOT/venv/bin/python" -c 'import rgbmatrix' 2>/dev/null; then
   SRC=$ROOT/rpi-rgb-led-matrix
+  PIL_INC=$ROOT/.pillow-headers
   [ -d "$SRC" ] || git clone --depth 1 https://github.com/hzeller/rpi-rgb-led-matrix "$SRC"
-  # librgbmatrix first, then the bindings against it. build-python/
-  # install-python are targets of bindings/python/Makefile — the repo root
-  # Makefile has no such target.
-  make -C "$SRC/lib"
-  make -C "$SRC/bindings/python" build-python PYTHON="$ROOT/venv/bin/python"
-  make -C "$SRC/bindings/python" install-python PYTHON="$ROOT/venv/bin/python"
+
+  # Upstream builds via scikit-build-core (pyproject at the repo root — there
+  # is no build-python make target), and unconditionally compiles a Pillow
+  # shim that needs Imaging.h. Those headers exist only in Pillow's source
+  # tree, never in the wheel, so fetch them for the installed version.
+  "$ROOT/venv/bin/pip" install --upgrade Pillow
+  if [ ! -f "$PIL_INC/Imaging.h" ]; then
+    VER=$("$ROOT/venv/bin/python" -c 'import PIL; print(PIL.__version__)')
+    rm -rf /tmp/pilsrc "$PIL_INC"; mkdir -p /tmp/pilsrc "$PIL_INC"
+    curl -fsSL "https://github.com/python-pillow/Pillow/archive/refs/tags/${VER}.tar.gz" \
+      -o /tmp/pilsrc/pillow.tar.gz
+    tar xf /tmp/pilsrc/pillow.tar.gz -C /tmp/pilsrc
+    cp /tmp/pilsrc/Pillow-*/src/libImaging/*.h "$PIL_INC/"
+  fi
+
+  CMAKE_ARGS="-DCMAKE_C_FLAGS=-I$PIL_INC -DCMAKE_CXX_FLAGS=-I$PIL_INC" \
+    "$ROOT/venv/bin/pip" install --no-cache-dir "$SRC"
 fi
+
+# rpi-rgb-led-matrix refuses to start while snd_bcm2835 is loaded — it drives
+# the same PWM peripheral. dtparam=audio=off (set by flash.sh) stops the
+# device-tree node but NOT the module, so blacklist it explicitly. Takes
+# effect on the next boot.
+cat > /etc/modprobe.d/dizzyos-no-snd.conf <<'EOF'
+# dizzyos: the HUB75 driver and the Pi's onboard sound share the PWM
+# peripheral; the driver exits at startup if this module is present.
+blacklist snd_bcm2835
+EOF
 
 # --- first dizzyos release --------------------------------------------------
 "$PAYLOAD/dizzyos-update" --install
