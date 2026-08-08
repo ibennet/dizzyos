@@ -31,6 +31,7 @@ are the ones you would otherwise discover with the wood already cut:
 | Change | What fails |
 |---|---|
 | Panels deeper than the frame stock | `standoffs have positive length` |
+| A cavity no stock standoff clears | `the standoff fits the cavity` |
 | Swap 1×3 for 1×2 | `Pi stack clears the panels` — the cavity gets too shallow |
 | A third panel in the chain | `frame comes out of one board`, `face comes out of one acrylic sheet` |
 | A taller HAT or an extra riser | `cable headroom behind the stack` |
@@ -38,3 +39,10 @@ are the ones you would otherwise discover with the wood already cut:
 `panel.depth` is the number most worth measuring rather than trusting: it varies
 between manufacturers more than anything else here, and it sets the standoff
 length directly.
+
+Note that `standoff_length` is not that exact length but the nearest stock size
+*below* it, chosen from `STOCK_STANDOFFS`; the difference falls out as
+`panel_recess`. Rounding down is deliberate — a standoff longer than the cavity
+stands the panels proud of the frame and bows the acrylic, whereas a short one
+just leaves them sitting a few millimetres behind it. Quote the stock number in
+the build guide, never the exact one: nobody sells a 48.5 mm standoff.

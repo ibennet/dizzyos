@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cad.params import CASE, fraction, inches  # noqa: E402
+from cad.params import CASE, STOCK_STANDOFFS, fraction, inches  # noqa: E402
 
 passed = 0
 failures = []
@@ -73,11 +73,24 @@ print("depth stack")
 # The standoffs set panel face flush with the acrylic. A negative or zero value
 # means the panels are deeper than the frame — no standoff can fix that.
 check("standoffs have positive length",
-      c.standoff_length > 0,
+      c.standoff_ideal > 0,
       f"panel depth {c.panel.depth} mm exceeds frame depth {c.interior_depth:.1f} mm")
-check("standoff length is buyable",
-      10 <= c.standoff_length <= 60,
-      f"{c.standoff_length:.1f} mm — outside the range sold as stock spacers")
+# The exact length is almost never a length anyone sells, so the design has to
+# name a stock part — and it must be the next size DOWN. A standoff longer than
+# the cavity stands the panels proud of the frame, where they press into the
+# acrylic and bow it; a shorter one just leaves them sitting behind it.
+check("the standoff is a size you can buy",
+      c.standoff_length in STOCK_STANDOFFS,
+      f"{c.standoff_length} mm is not in {STOCK_STANDOFFS}")
+check("the standoff fits the cavity",
+      c.standoff_length <= c.standoff_ideal,
+      f"stock {c.standoff_length} mm exceeds the {c.standoff_ideal:.1f} mm cavity — "
+      f"the panels would press into the acrylic")
+# Some recess is unavoidable once you round to stock; too much and the diffuser
+# is far enough off the LEDs to soften the pixels noticeably.
+check("panel sits close behind the acrylic",
+      c.panel_recess <= 5,
+      f"{c.panel_recess:.1f} mm behind the face — stock standoffs leave too big a gap")
 check("Pi stack clears the panels",
       c.stack_headroom > 0,
       f"stack {c.electronics.stack_depth:.1f} mm exceeds cavity "

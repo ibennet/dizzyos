@@ -75,6 +75,12 @@ class Panel:
         return self.pixels_y * self.pitch
 
 
+#: Lengths M3 nylon standoffs are actually sold in, in mm. The panels mount M3,
+#: so these come from the same metric standoff kit as the Pi's M2.5 hardware —
+#: there is no imperial spacer near the length this design wants.
+STOCK_STANDOFFS = (10, 12, 15, 18, 20, 25, 30, 35, 40, 45, 50)
+
+
 @dataclass(frozen=True)
 class Stock:
     """Lumber and sheet goods, at their real (not nominal) sizes."""
@@ -198,13 +204,38 @@ class Case:
 
     # --- depth stack ------------------------------------------------------
     @property
-    def standoff_length(self):
+    def standoff_ideal(self):
         """Back board to the back of a panel, so panel faces meet the acrylic.
 
         The panels hang off the back board rather than the frame, which is what
         lets the whole electronics assembly come out as one piece.
+
+        This is the exact length, which is almost never a length anyone sells —
+        see `standoff_length` for the one you actually buy.
         """
         return self.interior_depth - self.panel.depth
+
+    @property
+    def standoff_length(self):
+        """The stock standoff to buy: the longest one that is not too long.
+
+        Rounding DOWN rather than to-nearest is the whole point. Too long and
+        the panels stand proud of the frame and press into the acrylic, which
+        bows the face across its span and leaves the felt pads carrying a load
+        they are not there for. Too short and the panels simply sit a little
+        behind the acrylic instead of touching it, which costs nothing.
+        """
+        fits = [s for s in STOCK_STANDOFFS if s <= self.standoff_ideal]
+        # Nothing short enough means the cavity is shallower than the shortest
+        # standoff sold. Fall back to that shortest one rather than raising, so
+        # `test_fit` still reports every other check instead of a traceback —
+        # "the standoff fits the cavity" is the assertion that catches it.
+        return max(fits) if fits else min(STOCK_STANDOFFS)
+
+    @property
+    def panel_recess(self):
+        """How far the panel faces sit behind the acrylic, given stock parts."""
+        return self.standoff_ideal - self.standoff_length
 
     @property
     def cavity_behind_panels(self):
@@ -238,7 +269,9 @@ class Case:
             f"  frame opening       {fraction(self.opening_width)} × {fraction(self.opening_height)}",
             f"  outside             {fraction(self.outer_width)} × {fraction(self.outer_height)}"
             f" × {fraction(self.interior_depth)} deep",
-            f"  panel standoffs     {self.standoff_length:.1f} mm ({fraction(self.standoff_length)})",
+            f"  panel standoffs     {self.standoff_length:.0f} mm stock"
+            f"  (exact would be {self.standoff_ideal:.1f} mm)",
+            f"  panel sits behind   {self.panel_recess:.1f} mm of the acrylic",
             f"  cavity behind       {self.cavity_behind_panels:.1f} mm",
             f"  Pi + riser + HAT    {self.electronics.stack_depth:.1f} mm",
             f"  headroom for cable  {self.stack_headroom:.1f} mm",
