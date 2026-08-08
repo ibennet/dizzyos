@@ -25,8 +25,12 @@ PALETTE = {
     "label": {"scale": 1, "color": (170, 170, 170)}, # place name in the header
     "time": {"scale": 1, "color": (255, 196, 84)},   # amber clock in the header
     "rain": {"scale": 1, "color": (120, 190, 255)},  # upcoming-rain alert (bottom)
+    "rain_stop": {"scale": 1, "color": (255, 224, 70)},  # "rain ends" alert (bottom, when raining)
     "humidity": {"scale": 1, "color": (130, 200, 185)},  # humidity (bottom, when no rain)
 }
+
+# Weather categories (from icons.category) that count as "raining right now".
+RAIN_CATEGORIES = {"drizzle", "rain", "storm"}
 
 # Shown if the API can't be reached on first paint. Mild, clear, offset 0 (UTC) so
 # the clock still renders offline.
@@ -60,6 +64,7 @@ class WeatherApp(App):
             "longitude": lon,
             "current": "temperature_2m,weather_code,is_day,relative_humidity_2m",
             "hourly": "precipitation_probability",
+            "minutely_15": "precipitation",  # sub-hourly precip, so "rain stops" honors the 30-min rule
             "daily": "temperature_2m_max,temperature_2m_min",
             "temperature_unit": "fahrenheit",
             "timezone": "auto",
@@ -116,6 +121,8 @@ class WeatherApp(App):
             "humidity": rounded(current.get("relative_humidity_2m")),
             "now": now,  # naive local time, ticks each frame (recomputed here)
             "rain_at": self._next_rain(now),  # datetime of next likely rain, or None
+            "raining_now": category(current.get("weather_code", 3)) in RAIN_CATEGORIES,
+            "rain_stop": self._rain_stops(now),  # datetime rain clears for >30 min, or None
         }
 
     def _local_now(self, offset_seconds):
@@ -141,6 +148,57 @@ class WeatherApp(App):
         horizon = now + timedelta(hours=24)
         for tstr, prob in zip(times, probs):
             if not isinstance(prob, (int, float)) or prob < threshold:
+                continue
+            try:
+                t = datetime.fromisoformat(tstr)
+            except (ValueError, TypeError):
+                continue
+            if now <= t <= horizon:
+                return t
+        return None
+
+    def _rain_stops(self, now):
+        """Local `datetime` when precipitation is forecast to stop and stay gone for more
+        than 30 minutes, or None if it never clears within the horizon. Prefers the
+        15-minute series (so the 30-min rule is real); falls back to the hourly
+        probability series when sub-hourly data isn't available for the location."""
+        wx = self._wx or {}
+        horizon = now + timedelta(hours=24)
+
+        # Preferred: 15-minute precipitation. A step is "dry" below the mm epsilon; a stop
+        # only counts once the following 30 min (the next two steps) are dry too.
+        minutely = wx.get("minutely_15") or {}
+        m_times = minutely.get("time") or []
+        m_precip = minutely.get("precipitation") or []
+        if m_times and m_precip:
+            dry_mm = self.config.get("rain_stop_precip_mm", 0.1)
+
+            def is_dry(i):
+                p = m_precip[i]
+                return isinstance(p, (int, float)) and p < dry_mm
+
+            for i, tstr in enumerate(m_times):
+                if not is_dry(i):
+                    continue
+                try:
+                    t = datetime.fromisoformat(tstr)
+                except (ValueError, TypeError):
+                    continue
+                if t < now or t > horizon:
+                    continue
+                # Require the 30 minutes after this step to also be dry (the next two
+                # 15-min steps). If the series ends first, treat it as clearing.
+                if all(is_dry(j) for j in (i + 1, i + 2) if j < len(m_precip)):
+                    return t
+            return None
+
+        # Fallback: hourly probability — a sub-threshold hour spans 60 min > 30 already.
+        hourly = wx.get("hourly") or {}
+        times = hourly.get("time") or []
+        probs = hourly.get("precipitation_probability") or []
+        threshold = self.config.get("rain_probability_threshold", 30)
+        for tstr, prob in zip(times, probs):
+            if not isinstance(prob, (int, float)) or prob >= threshold:
                 continue
             try:
                 t = datetime.fromisoformat(tstr)
@@ -201,8 +259,11 @@ class WeatherApp(App):
         pf.draw_text(draw, rx, hl_y, high_str, PALETTE["high"]["color"], scale=hs)
         pf.draw_text(draw, rx + gap, hl_y, low_str, PALETTE["low"]["color"], scale=hs)
 
-        # Bottom row: the upcoming-rain alert if any, otherwise current humidity.
-        if reading["rain_at"]:
+        # Bottom row: when it's raining now, when it lets up (yellow); otherwise the
+        # upcoming-rain alert if any, otherwise current humidity.
+        if reading["raining_now"] and reading["rain_stop"]:
+            key, text = "rain_stop", f"Rain til {self._fmt_time(reading['rain_stop'])}"
+        elif not reading["raining_now"] and reading["rain_at"]:
             key, text = "rain", f"Rain at {self._fmt_time(reading['rain_at'])}"
         elif reading["humidity"] is not None:
             key, text = "humidity", f"Humidity {reading['humidity']}%"
