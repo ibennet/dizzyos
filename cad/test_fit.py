@@ -10,6 +10,7 @@ Run directly, or via dev/check.sh. No dependencies.
 """
 
 import os
+import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -121,6 +122,53 @@ check("Pi footprint fits inside the opening",
 print("cut list is sane")
 for part, qty, size in c.cut_list():
     check(f"{part} has a size", bool(size) and "0 in" not in size, size)
+
+# The build sheet says twice that its drawings cannot drift from this module.
+# They can, and did: its 3D model carried hand-typed millimetres and its buy
+# list quoted a 2 in standoff against a 48.5 mm cavity. Nothing connects a
+# published HTML page to a Python module except a check that reads both.
+print("build sheet agrees with the model")
+SHEET = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "docs", "build-sheet.html")
+if not os.path.exists(SHEET):
+    print(f"  skip: no build sheet at {SHEET}")
+else:
+    sheet = open(SHEET, encoding="utf-8").read()
+    # Pull the constants back out of the page's own model script.
+    consts = dict(re.findall(r"(\bW|\bH|\bD|PANEL|PANEL_D|BACK|ACRYLIC|STANDOFF)"
+                             r"\s*=\s*([0-9.]+)", sheet))
+    for name, expected in (("W", c.outer_width),
+                           ("H", c.outer_height),
+                           ("D", c.interior_depth),
+                           ("PANEL", c.panel.width),
+                           ("PANEL_D", c.panel.depth),
+                           ("BACK", c.stock.back_thickness),
+                           ("STANDOFF", c.standoff_length)):
+        got = consts.get(name)
+        check(f"sheet's {name} matches params.py",
+              got is not None and abs(float(got) - expected) < 0.05,
+              f"sheet says {got}, params.py derives {expected:.2f}")
+    # The cut list is the part someone hands to a lumber desk, so check the
+    # strings the page actually prints. It sets them as typographic fractions
+    # (16¾) where `fraction()` emits ASCII (16 3/4); normalise before comparing
+    # rather than teaching either side about the other's spelling.
+    VULGAR = {"¼": " 1/4", "½": " 1/2", "¾": " 3/4", "⅛": " 1/8",
+              "⅜": " 3/8", "⅝": " 5/8", "⅞": " 7/8", "⁹⁄₁₆": " 9/16"}
+    flat = sheet
+    for glyph, ascii_ in VULGAR.items():
+        flat = flat.replace(glyph, ascii_)
+    for label, value in (("rail", c.rail_length),
+                         ("stile", c.stile_length),
+                         ("opening width", c.opening_width),
+                         ("opening height", c.opening_height)):
+        # The unit is optional: the sheet writes paired dimensions as
+        # "15 1/4 × 7 3/4 in", so only the last of the pair carries the "in".
+        # The leading guard stops 15 1/4 matching inside 115 1/4.
+        bare = fraction(value).replace(" in", "")
+        check(f"sheet quotes the {label} as {fraction(value)}",
+              re.search(r"(?<![\d.])" + re.escape(bare) + r"(?![\d/])", flat)
+              is not None,
+              f"{fraction(value)} does not appear in the build sheet")
 
 print()
 print(c.report())
