@@ -17,6 +17,9 @@ location_label: ""
 # Show "Rain at HH:MM" when the next hour's chance of rain (within 24h) is at least
 # this percent. Raise to make the alert less chatty; there's no alert below it.
 rain_probability_threshold: 30
+# When it's raining now, show "Rain til HH:MM" in yellow once precip is forecast to stop
+# for more than 30 min. A 15-minute step counts as dry below this many mm of precipitation.
+rain_stop_precip_mm: 0.1
 # Clock and rain-time format: "12h" (3:17 PM) or "24h" (15:17).
 time_format: "12h"
 # APIs (rarely need changing).
