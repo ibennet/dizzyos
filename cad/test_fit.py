@@ -15,7 +15,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from cad.params import CASE, STOCK_STANDOFFS, fraction, inches  # noqa: E402
+from cad.params import (CASE, MIN_THREAD_ENGAGEMENT, STOCK_STANDOFFS,  # noqa: E402
+                        fraction, inches)
 
 passed = 0
 failures = []
@@ -103,6 +104,22 @@ check("cable headroom behind the stack",
       c.stack_headroom >= 8,
       f"only {c.stack_headroom:.1f} mm — ribbons need room to turn")
 
+print("panel mounting screws")
+# The inlets are threaded and blind, so the screw is caught between reaching
+# and bottoming out. The build sheet originally called for M3 × 16 mm against a
+# 50.8 mm span — 35 mm short of even touching the panel.
+check("a stock M3 screw fits the stack",
+      MIN_THREAD_ENGAGEMENT <= c.panel_screw_engagement
+      <= c.panel.mount_thread_depth,
+      f"M3 × {c.panel_screw_length:.0f} mm engages "
+      f"{c.panel_screw_engagement:.1f} mm of a "
+      f"{c.panel.mount_thread_depth:.0f} mm inlet across a "
+      f"{c.panel_screw_span:.1f} mm span")
+check("the screw clears the back board and spacers",
+      c.panel_screw_length > c.panel_screw_span,
+      f"M3 × {c.panel_screw_length:.0f} mm cannot cross "
+      f"{c.panel_screw_span:.1f} mm of back board and spacers")
+
 print("material yield")
 check("frame comes out of one board",
       c.board_length_needed <= c.stock.board_length,
@@ -172,6 +189,16 @@ else:
               re.search(r"(?<![\d.])" + re.escape(bare) + r"(?![\d/])", flat)
               is not None,
               f"{fraction(value)} does not appear in the build sheet")
+    # The buy list originally said M3 × 16 mm against a 50.8 mm span — a screw
+    # that could not reach the panel. Nothing caught it because nothing checked
+    # the fastener at all, so check the one the sheet actually tells you to buy.
+    screw = f"M3 × {c.panel_screw_length:.0f} mm"
+    check(f"sheet quotes the panel screw as {screw}",
+          screw in sheet,
+          f"{screw} does not appear in the build sheet")
+    check("sheet asks for one spacer stack per mounting hole",
+          str(c.spacers_needed) in sheet,
+          f"the sheet never mentions needing {c.spacers_needed} of them")
 
 print()
 print(c.report())

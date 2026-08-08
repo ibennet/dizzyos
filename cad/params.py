@@ -65,6 +65,13 @@ class Panel:
     #: with calipers; panel depth varies by manufacturer more than any other
     #: number here, and it sets the standoff length.
     depth: float = 15.0
+    #: Mounting points on the back. Adafruit's 64×64 P3 (4732) has four.
+    mount_holes: int = 4
+    #: These are threaded M3 inlets, NOT through-holes — the screw threads into
+    #: the panel and takes no nut. That is why the mounting screw has to span
+    #: the back board and the whole spacer stack before it engages anything,
+    #: and why it can bottom out: the thread is only so deep. Measure yours.
+    mount_thread_depth: float = 6.0
 
     @property
     def width(self):
@@ -94,6 +101,13 @@ STOCK_STANDOFFS = (
     (44.45, '1 in + 3/4 in spacers stacked'),
     (50.80, '2 × 1 in spacers stacked'),
 )
+
+#: M3 machine screw lengths sold in the fastener aisle, in mm.
+STOCK_M3_SCREWS = (6, 8, 10, 12, 16, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70)
+
+#: Thread engaged in the panel's inlet, at minimum. Below roughly one screw
+#: diameter the threads strip out of a soft insert before the joint is tight.
+MIN_THREAD_ENGAGEMENT = 3.0
 
 
 @dataclass(frozen=True)
@@ -261,6 +275,37 @@ class Case:
         """How far the panel faces sit behind the acrylic, given stock parts."""
         return self.standoff_ideal - self.standoff_length
 
+    # --- panel mounting screws --------------------------------------------
+    @property
+    def panel_screw_span(self):
+        """What the screw crosses before it reaches the panel at all."""
+        return self.stock.back_thickness + self.standoff_length
+
+    @property
+    def panel_screw_length(self):
+        """Shortest stock M3 that engages the inlet without bottoming out.
+
+        The panel's inlets are threaded and blind, which puts the screw between
+        two walls: too short and it never bites, too long and it bottoms out on
+        the end of the thread and stops before the joint is tight — which feels
+        exactly like a tightened screw and holds nothing.
+        """
+        fits = [s for s in STOCK_M3_SCREWS
+                if MIN_THREAD_ENGAGEMENT <= s - self.panel_screw_span
+                <= self.panel.mount_thread_depth]
+        # No length works — the check "a stock M3 screw fits the stack" says so.
+        return min(fits) if fits else max(STOCK_M3_SCREWS)
+
+    @property
+    def panel_screw_engagement(self):
+        """Thread actually engaged in the panel, with the chosen screw."""
+        return self.panel_screw_length - self.panel_screw_span
+
+    @property
+    def spacers_needed(self):
+        """Total spacer stacks, one per mounting hole across every panel."""
+        return self.panel.mount_holes * self.panels_x * self.panels_y
+
     @property
     def cavity_behind_panels(self):
         """Depth available for the Pi/HAT stack."""
@@ -297,6 +342,11 @@ class Case:
             f"  — {self.standoff_source}",
             f"                      (exact would be {self.standoff_ideal:.1f} mm;"
             f" panel sits {self.panel_recess:.1f} mm behind the acrylic)",
+            f"  spacer stacks       {self.spacers_needed}"
+            f"  ({self.panel.mount_holes} per panel)",
+            f"  panel screws        M3 × {self.panel_screw_length:.0f} mm"
+            f"  ({self.panel_screw_engagement:.1f} mm into a"
+            f" {self.panel.mount_thread_depth:.0f} mm inlet)",
             f"  cavity behind       {self.cavity_behind_panels:.1f} mm",
             f"  Pi + riser + HAT    {self.electronics.stack_depth:.1f} mm",
             f"  headroom for cable  {self.stack_headroom:.1f} mm",
