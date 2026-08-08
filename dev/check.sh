@@ -19,4 +19,7 @@ echo "==> byte-compiling"
 echo "==> smoke test"
 "$PYTHON" dev/smoke.py
 
+echo "==> enclosure fit checks"
+"$PYTHON" cad/test_fit.py
+
 echo "==> check.sh: green"
