@@ -282,8 +282,11 @@
   .dot3d {
     position: absolute;
     left: 0; top: 0;
-    width: 5px; height: 5px;
+    width: 7px; height: 7px;
     background: var(--amber);
+    /* A ring in the surface colour, so the dot still reads when it lands on a
+       translucent panel rather than on the empty background. */
+    box-shadow: 0 0 0 1.5px var(--surface);
     pointer-events: none;
     opacity: 0;
     transition: opacity .35s ease;
@@ -323,6 +326,10 @@
   .box.glass { --edge: var(--teal);  --fill: rgba(60,160,175,.14); }
   .box.stand { --edge: var(--muted); --fill: rgba(128,128,128,.35); }
   .box.steel { --edge: var(--muted); --fill: rgba(90,100,110,.55); }
+  /* Declared last so it beats the palette classes at equal specificity. Lights
+     the part its label names, which is the only reliable way to point at
+     something sitting behind two translucent panels. */
+  .box.lit { --edge: var(--amber); --fill: rgba(232,137,12,.55); }
   .box.hat    { --edge: var(--amber); --fill: rgba(232,137,12,.45); }
   .box.ribbon { --edge: var(--muted); --fill: rgba(150,155,165,.5); }
   .box.screw  { --edge: var(--rule-strong); --fill: rgba(70,78,88,.75); }
@@ -1009,49 +1016,56 @@
       // Panels sit STANDOFF forward of the back board, which puts their faces
       // `panel_recess` short of the acrylic rather than flush with the frame.
       var zPanel = zBack + STANDOFF + PANEL_D / 2;
+      // Named depths, shared by each part and the label that points at it. When
+      // these were written out twice the labels drifted off their parts.
+      var zBoard = zBack - BACK / 2;
+      var zSpacer = zBack + STANDOFF / 2;
+      var zGlass = zFront + ACRYLIC / 2;
+      var zHang = zBack - BACK - 0.8;
+      var zHat = -2.2, zPi = -20.4, zRiser = -16.5, zRib = 8;
       var PARTS = [
         // 1-4 — the four cut pieces: loose, then dry-fitted, then two corners
-        { cls: "wood", w: W, h: T, d: D, x: 0, y: (H - T) / 2, z: 0,
+        { k: "frame", cls: "wood", w: W, h: T, d: D, x: 0, y: (H - T) / 2, z: 0,
           g: 1, gi: 3, sy: 105, mid: [2, 0, 22, 0] },
-        { cls: "wood", w: T, h: OPEN_H, d: D, x: -(W - T) / 2, y: 0, z: 0,
+        { k: "frame", cls: "wood", w: T, h: OPEN_H, d: D, x: -(W - T) / 2, y: 0, z: 0,
           g: 1, gi: 3, sx: -135, mid: [2, -30, 0, 0] },
-        { cls: "wood", w: T, h: OPEN_H, d: D, x: (W - T) / 2, y: 0, z: 0,
+        { k: "frame", cls: "wood", w: T, h: OPEN_H, d: D, x: (W - T) / 2, y: 0, z: 0,
           g: 1, gi: 4, sx: 135, mid: [2, 30, 0, 0] },
-        { cls: "wood", w: W, h: T, d: D, x: 0, y: -(H - T) / 2, z: 0,
+        { k: "frame", cls: "wood", w: W, h: T, d: D, x: 0, y: -(H - T) / 2, z: 0,
           g: 1, gi: 4, sy: -105, mid: [2, 0, -22, 0] },
         // 5 — the HAT, soldered loose on the bench before anything is mounted.
         // It joins the sub-assembly at 11 while that is still parked behind the
         // case (hence the mid pose also carrying STAGED), and only travels in
         // with everything else at 14. Seating it at 11 would fly it into an
         // empty frame while the Pi it bolts to is still 195 mm behind.
-        { cls: "hat", w: 65, h: 56, d: 13.6, x: 40, y: 0, z: -2.2,
+        { k: "hat", cls: "hat", w: 65, h: 56, d: 13.6, x: 40, y: 0, z: zHat,
           g: 5, gi: 14, sx: -150, sy: -105, sz: STAGED,
           mid: [11, 0, 0, STAGED] },
         // the 2x20 stacking header the HAT sits on — the reason it clears the
         // Pi's port cans at all
-        { cls: "ribbon", w: 51, h: 5, d: 15, x: 40, y: 25, z: -16.5,
+        { k: "riser", cls: "ribbon", w: 51, h: 5, d: 15, x: 40, y: 25, z: zRiser,
           g: 11, gi: 14, sz: STAGED },
         // 6-10 — the back board assembly, built up behind the case
-        { cls: "wood", w: W, h: H, d: BACK, x: 0, y: 0, z: zBack - BACK / 2,
+        { k: "backBoard", cls: "wood", w: W, h: H, d: BACK, x: 0, y: 0, z: zBoard,
           g: 6, gi: 14, sz: STAGED },
 
-        { cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: -PANEL / 2, y: 0, z: zPanel, g: 8, gi: 14, sz: STAGED },
-        { cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: PANEL / 2, y: 0, z: zPanel, g: 9, gi: 14, sz: STAGED },
-        { cls: "pcb", w: 85, h: 56, d: 10, x: 40, y: 0, z: -20.4, g: 10, gi: 14, sz: STAGED },
+        { k: "panels", cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: -PANEL / 2, y: 0, z: zPanel, g: 8, gi: 14, sz: STAGED },
+        { k: "panels", cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: PANEL / 2, y: 0, z: zPanel, g: 9, gi: 14, sz: STAGED },
+        { k: "pi", cls: "pcb", w: 85, h: 56, d: 10, x: 40, y: 0, z: zPi, g: 10, gi: 14, sz: STAGED },
         // 11 — ribbon cables, HAT to panel and panel to panel
-        { cls: "ribbon", w: 46, h: 13, d: 1.8, x: -40, y: 26, z: 8, g: 11, gi: 14, sz: STAGED },
-        { cls: "ribbon", w: 30, h: 13, d: 1.8, x: 0, y: -42, z: 8, g: 11, gi: 14, sz: STAGED },
+        { k: "ribbons", cls: "ribbon", w: 46, h: 13, d: 1.8, x: -40, y: 26, z: zRib, g: 11, gi: 14, sz: STAGED },
+        { k: "ribbons", cls: "ribbon", w: 30, h: 13, d: 1.8, x: 0, y: -42, z: zRib, g: 11, gi: 14, sz: STAGED },
         // 12 — power leads, out through the hole low in the back board
-        { cls: "ribbon", w: 11, h: 11, d: 34, x: -150, y: -96, z: zBack - BACK - 17,
+        { k: "power", cls: "ribbon", w: 11, h: 11, d: 34, x: -150, y: -96, z: zBack - BACK - 17,
           g: 12, gi: 14, sz: STAGED },
         // 13 — the face, cut and then fitted at 15
-        { cls: "glass", w: W, h: H, d: ACRYLIC, x: 0, y: 0, z: zFront + ACRYLIC / 2,
+        { k: "face", cls: "glass", w: W, h: H, d: ACRYLIC, x: 0, y: 0, z: zGlass,
           g: 13, gi: 15, sz: 210 },
         // 16 — the keyhole hangers, on the outside of the back board
         { k: "hangers", cls: "steel", w: 38, h: 16, d: 1.6, x: -130, y: (H - T) / 2 - 26,
-          z: zBack - BACK - 0.8, g: 16, sz: -120 },
+          z: zHang, g: 16, sz: -120 },
         { k: "hangers", cls: "steel", w: 38, h: 16, d: 1.6, x: 130, y: (H - T) / 2 - 26,
-          z: zBack - BACK - 0.8, g: 16, sz: -120 }
+          z: zHang, g: 16, sz: -120 }
       ];
 
       // Every fastener the build uses, declared as counts and then generated —
@@ -1088,7 +1102,7 @@
         [-hx, hx].forEach(function (dx) {
           [-hx, hx].forEach(function (dy) {
             add({ k: "panelSpacers", cls: "stand", w: 9, h: 9, d: STANDOFF,
-                  x: cx + dx, y: dy, z: zBack + STANDOFF / 2,
+                  x: cx + dx, y: dy, z: zSpacer,
                   g: 7, gi: 14, sz: STAGED });
             add({ k: "panelScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
                   x: cx + dx, y: dy, z: zHead,
@@ -1175,20 +1189,30 @@
       // does not sit on top of the geometry. y is up, as everywhere in this
       // table. Each appears with the stage that introduces its part.
       var LX = W / 2 + 145, LY = H / 2 + 92;
-      // `to` is where the leader ends: the near edge of the part being named,
-      // so the line points at the thing rather than vaguely into the case.
+      // `to` is where the leader ends: the near edge of the part being named.
+      // `z` is that part's own depth, taken from the same variable the part uses.
+      // `for` names the part so it can be lit while its label is the live one —
+      // five of these point at things sitting behind the panels, where a dot
+      // alone reads as being on the panel rather than behind it.
       var LABELS = [
-        { t: "1×3 frame",        x: -LX, y: 72,  z: 0,   g: 1,  to: -(W / 2 - T) },
-        { t: "ribbon cables",    x: -LX, y: 0,   z: 8,   g: 11, to: -63 },
-        { t: "1¾ in spacers ×8", x: -LX, y: -72, z: zBack + STANDOFF / 2,
-          g: 7,  to: -(PANEL / 2 + hx) - 4.5 },
-        { t: "¼ in plywood back", x: LX, y: 72,  z: zBack - BACK, g: 6, to: W / 2 },
-        { t: "matrix HAT",        x: LX, y: 0,   z: -2.2,  g: 5,  to: 72.5 },
-        { t: "Raspberry Pi",      x: LX, y: -72, z: -20.4, g: 10, to: 82.5 },
-        { t: "acrylic face",     x: -95, y: LY,  z: zFront + 20, g: 13, to: H / 2 },
-        { t: "keyhole hangers",  x: 95,  y: LY,  z: zBack - 30,
-          g: 16, to: (H - T) / 2 - 26 + 8 },
-        { t: "64×64 panels ×2",  x: 0,   y: -LY, z: zPanel, g: 8, to: -PANEL / 2 }
+        { t: "1×3 frame", for: "frame",
+          x: -LX, y: 72,  z: 0,       g: 1,  to: -(W / 2 - T) },
+        { t: "ribbon cables", for: "ribbons",
+          x: -LX, y: 26,  z: zRib,    g: 11, to: -63 },
+        { t: "1¾ in spacers ×8", for: "panelSpacers",
+          x: -LX, y: -86, z: zSpacer, g: 7,  to: -(PANEL / 2 + hx) - 4.5 },
+        { t: "¼ in plywood back", for: "backBoard",
+          x: LX,  y: 72,  z: zBoard,  g: 6,  to: W / 2 },
+        { t: "matrix HAT", for: "hat",
+          x: LX,  y: 26,  z: zHat,    g: 5,  to: 72.5 },
+        { t: "Raspberry Pi", for: "pi",
+          x: LX,  y: -26, z: zPi,     g: 10, to: 82.5 },
+        { t: "acrylic face", for: "face",
+          x: -95, y: LY,  z: zGlass,  g: 13, to: H / 2 },
+        { t: "keyhole hangers", for: "hangers",
+          x: 130, y: LY,  z: zHang,   g: 16, to: (H - T) / 2 - 26 + 8 },
+        { t: "64×64 panels ×2", for: "panels",
+          x: 0,   y: -LY, z: zPanel,  g: 8,  to: -PANEL / 2 }
       ];
       // A label anchored on the left or right runs its leader along x; one
       // anchored above or below runs it along y. Which it is falls out of
@@ -1270,6 +1294,40 @@
         return box;
       });
 
+      // Which boxes each label names. Resolved once; a label whose `for` matches
+      // nothing yields an empty list, which the fit checks refuse.
+      var litFor = LABELS.map(function (L) {
+        var ids = [];
+        PARTS.forEach(function (p, i) {
+          if ((p.k || p.cls) === L.for) { ids.push(i); }
+        });
+        return ids;
+      });
+
+      // Does each label's dot actually land on the part it names? Three missed
+      // when the targets were written by hand: the spacer label ran at y=-72
+      // against spacers at -86, the Pi label at -72 against a board spanning
+      // ±28, and the hanger label at x=95 against hangers at ±130. Geometry
+      // this fiddly needs checking, not eyeballing.
+      LABELS.forEach(function (L, i) {
+        var side = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        var tx = side ? L.to : L.x, ty = side ? L.y : L.to;
+        if (!litFor[i].length) {
+          console.error("[build-sheet] label '" + L.t + "' names no part: " + L.for);
+          return;
+        }
+        var hit = litFor[i].some(function (bi) {
+          var p = PARTS[bi];
+          return Math.abs(tx - p.x) <= p.w / 2 + 1.5
+              && Math.abs(ty - p.y) <= p.h / 2 + 1.5
+              && Math.abs(L.z - p.z) <= p.d / 2 + 1.5;
+        });
+        if (!hit) {
+          console.error("[build-sheet] label '" + L.t +
+                        "' does not point at its " + L.for);
+        }
+      });
+
       function place(stage) {
         PARTS.forEach(function (p, i) {
           var visible = stage >= p.g;
@@ -1290,6 +1348,15 @@
             "translate3d(" + x + "px," + (-y) + "px," + z + "px)";
           boxes[i].style.opacity = visible ? "1" : "0";
         });
+        // Light only the part whose label just arrived — lighting every named
+        // part from its stage onward would end with the whole model amber.
+        var lit = {};
+        LABELS.forEach(function (L, i) {
+          if (stage === L.g) {
+            litFor[i].forEach(function (bi) { lit[bi] = true; });
+          }
+        });
+        boxes.forEach(function (b, i) { b.classList.toggle("lit", !!lit[i]); });
         LABELS.forEach(function (L, i) {
           var on = stage >= L.g;
           labelEls[i].classList.toggle("in", on);

@@ -350,6 +350,28 @@ else:
           not stray,
           f"label(s) {stray} sit outside stages 1-{top_part}")
 
+    # Each label declares the part it points at, and every part identifier in
+    # the drawing is either a cls or a k. A `for` that matches neither points at
+    # nothing, and the label would name a part it never highlights.
+    named = set(re.findall(r'\bfor:\s*"([^"]+)"', lblock.group(1))) \
+        if lblock else set()
+    ids = set(re.findall(r'\bcls:\s*"(\w+)"', body)) \
+        | set(re.findall(r'\bk:\s*"(\w+)"', body))
+    check("every label names a part that exists",
+          named and named <= ids,
+          f"label target(s) {sorted(named - ids)} match no part in the drawing")
+    # The label's own depth must be the part's depth, or the leader floats in
+    # front of or behind the thing it points at. Both were wrong — the acrylic
+    # label sat 19 mm proud of the acrylic — because each was written twice.
+    # Sharing a named variable is what fixes it; this checks nobody re-inlines.
+    inlined = re.findall(r"\{ t: \"[^\"]+\", for: \"[^\"]+\",\s*\n\s*x:[^,]+,"
+                         r"\s*y:[^,]+,\s*z: (-?[\d.]+)\s*,", lblock.group(1)) \
+        if lblock else []
+    check("no label hardcodes its own depth",
+          not [z for z in inlined if z not in ("0",)],
+          f"label depth(s) {inlined} written as literals rather than shared "
+          f"with the part they point at")
+
     # A stage nothing happens in is a stretch of text with a frozen drawing —
     # the thing this whole animation exists to avoid.
     active = set(appears) | set(seats) | set(mids)
