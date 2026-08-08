@@ -14,7 +14,7 @@ plain `fn(frame)` callables that paint onto the PIL frame in place.
 import threading
 import time
 
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 
 # Icon palette. The arcs are kept dim so the bright slash carries the "off".
 _ARC = (200, 45, 40)
@@ -47,40 +47,66 @@ _WIFI_SLASH = [(i + 1, i) for i in range(9)]
 
 
 class OverlayManager:
-    """Named overlay layers with optional TTLs, composed newest-last."""
+    """Named overlay layers with optional TTLs.
+
+    Composed in insertion order (first shown, drawn first); re-showing a name
+    updates it in place without changing its order. There are only ever a couple
+    of system overlays, so there is no explicit z-index. Each layer's rasterised
+    sprite is cached and invalidated on show(), so compose() is a cheap
+    alpha-composite per frame rather than re-running the draw calls every frame.
+    """
 
     def __init__(self, clock=time.monotonic):
         self._clock = clock
         self._lock = threading.Lock()
-        self._layers = {}  # name -> (draw_fn, expires_at | None)
+        self._layers = {}   # name -> (draw_fn, expires_at | None)
+        self._sprites = {}  # name -> (size, RGBA sprite) cache
 
     def show(self, name, draw_fn, ttl=None):
-        """Add/replace overlay `name`. With `ttl` (seconds) it self-clears."""
-        expires = self._clock() + ttl if ttl else None
+        """Add/replace overlay `name`. With `ttl` (seconds) it self-clears; a
+        ttl of None means it stays until hidden (0 means expire immediately)."""
+        expires = self._clock() + ttl if ttl is not None else None
         with self._lock:
             self._layers[name] = (draw_fn, expires)
+            self._sprites.pop(name, None)  # force a re-raster on next compose
 
     def hide(self, name):
         with self._lock:
             self._layers.pop(name, None)
+            self._sprites.pop(name, None)
+
+    def _live(self, now):
+        """Names not yet expired, in insertion order. Pure — no mutation."""
+        return [n for n, (_, exp) in self._layers.items()
+                if exp is None or exp > now]
 
     def active(self):
-        """Names currently showing (expired layers dropped first)."""
-        now = self._clock()
+        """Names currently showing. A query — it does not mutate state."""
         with self._lock:
-            self._layers = {n: (fn, exp) for n, (fn, exp) in self._layers.items()
-                            if exp is None or exp > now}
-            return list(self._layers)
+            return self._live(self._clock())
+
+    def _sprite(self, name, size):
+        """The overlay's cached RGBA sprite (drawn once), rebuilt on size change.
+        Caller holds the lock."""
+        entry = self._sprites.get(name)
+        if entry and entry[0] == size:
+            return entry[1]
+        sprite = Image.new("RGBA", size, (0, 0, 0, 0))
+        self._layers[name][0](sprite)  # the draw_fn paints onto the transparent sprite
+        self._sprites[name] = (size, sprite)
+        return sprite
 
     def compose(self, frame):
-        """Draw all active overlays onto `frame` (in place) and return it."""
+        """Alpha-composite all live overlays onto `frame` (in place); return it.
+        Expired layers are pruned here — the one place we mutate on read."""
         now = self._clock()
         with self._lock:
-            live = [(n, fn) for n, (fn, exp) in self._layers.items()
-                    if exp is None or exp > now]
-            self._layers = {n: self._layers[n] for n, _ in live}
-        for _, fn in live:
-            fn(frame)
+            live = self._live(now)
+            self._layers = {n: self._layers[n] for n in live}
+            self._sprites = {n: v for n, v in self._sprites.items() if n in live}
+            sprites = [self._sprite(n, frame.size) for n in live]
+        for sprite in sprites:  # paste outside the lock; alpha channel is the mask
+            frame.paste(sprite, (0, 0), sprite)
         return frame
 
 

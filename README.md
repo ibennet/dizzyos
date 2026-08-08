@@ -169,6 +169,9 @@ journalctl -u dizzyos-update
 - **Stack vs. side-by-side:** the panels chain into 128×64. To mount them as a tall
   64×128 instead, set `pixel_mapper_config: "Rotate:90"` in `config.yaml` — no code
   change.
+- **Enclosure + full build:** [`docs/build-sheet.html`](docs/build-sheet.html) is the
+  step-by-step wood/acrylic build (cut list, wiring, assembly); the parametric model
+  and its fit checks live in [`cad/`](cad/) (`python cad/test_fit.py`).
 
 ## Credits
 

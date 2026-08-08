@@ -34,8 +34,14 @@ the PWM peripheral with the matrix; `gpu_mem=16`; Bluetooth off; `isolcpus=3`), 
 first-boot provisioning script, and the bootstrap payload from `tools/pi/`.
 
 Because a `dd` typo overwrites a Mac disk, the guardrails are part of the decision, not
-polish: internal disks are refused outright, and you retype both the device node and
-its size to confirm.
+polish: fixed disks are refused, anything larger than a card (>512 GB) is refused, and a
+target carrying an APFS/HFS/Time Machine volume — i.e. a Mac disk with data on it — is
+refused too (all overridable only with `--force`). The partition map is printed so the
+human can recognise the wrong disk by its volume names, the device identity is re-checked
+immediately before the write (closing the reseat/reassign TOCTOU window), and you retype
+the device node to confirm. The SHA256 check is integrity, not authenticity — it comes
+from the same host over the same TLS as the image, so it catches corruption, not a
+compromised mirror.
 
 ### (b) Provisioning is headless; the settings page is LAN-only and authorized by the sign itself
 
@@ -46,11 +52,22 @@ for pre-cloud-init images — so the first boot is unattended. To *change* thing
 (rejoin WiFi, edit config) the sign serves a settings page on the LAN at
 `http://<hostname>.local:8080`.
 
-Authorization is **physical presence**: opening the page makes the sign display a
-one-time PIN for 30 seconds. You type what you can see on the sign. That is the whole
-auth model, and it's a good fit — the threat isn't a remote attacker (the port is
-LAN-only), it's a housemate on the same WiFi. Being in the room is exactly the
-credential we want to check.
+Authorization is **physical presence**: pressing "show PIN" makes the sign display a
+one-time 6-digit PIN for 30 seconds. You type what you can see on the sign.
+
+**What this actually protects.** Be honest about the boundary: the PIN gates against
+someone *off the LAN* or *not in the room*. It is **not** a real boundary against a
+trusted peer on the same WiFi — a housemate can see the sign, and on a shared-PSK
+network could capture the PIN off cleartext HTTP. We treat the LAN peer as trusted;
+if that ever stops being true, add a second credential (an admin passphrase generated
+at flash time) rather than leaning on the PIN. What the server *does* defend, even
+LAN-only, is the class of bug that turns "LAN-only, so we're fine" into a remote hole:
+brute force (6-digit PIN, a global 1/second throttle, lockout after repeated
+failures), cross-origin abuse (a `Host`-header allowlist defeats DNS rebinding; a
+per-session CSRF token guards the write forms; issuing the PIN is a POST so a
+cross-site `<img>` can't park a banner on the display), and privilege (the render
+process runs as `daemon` and reaches root only through three fixed-purpose sudo
+helpers — restart, config write, WiFi join — never as a general shell).
 
 **Rejected: Bluetooth LE provisioning.** The obvious "phone talks to the sign" answer,
 and the one commercial devices use. But it requires a native app, because iOS Safari
@@ -92,7 +109,19 @@ timer won't retry it, and the sign keeps running the version it was running. Old
 releases are pruned.
 
 User configuration lives in **`/etc/dizzyos/config.yaml`**, outside the release tree, so
-it survives every update. `/etc/dizzyos/update.conf` names the repo to track.
+it survives every update. `/etc/dizzyos/update.conf` names the repo to track. Because it
+survives updates, release code must stay **forward-compatible with any prior config
+shape**: `run.py` deep-merges the user file over the release's default `config.yaml`, so
+a new release's added keys always resolve to a value against an old user file. The updater
+also reinstalls the target release's pinned `requirements-pi.txt` on rollback, so a
+rollback restores dependencies too (the venv is shared) — hence the pins are exact.
+
+**Trust.** There is no signature on releases (see Consequences): the updater trusts
+GitHub over HTTPS and pins each fetch to the commit SHA the tag points at *now* (so a
+re-cut tag can't silently ship two signs different code). For a solo project on networks
+I control this is acceptable, but it means a GitHub account compromise, or a mis-push to a
+tag, deploys to every sign automatically on the nightly timer with no human in the loop —
+which is why "releases are cut by anyone but me" is a revisit trigger below.
 
 ### (d) A/B root partitions are deferred, not dismissed
 
@@ -127,4 +156,9 @@ nightly, with rollback. Tracked in issue #8 for when the tradeoff shifts.
   revisit A/B partitions in (d).
 - The app layer grows a build step (compiled assets, non-pure-Python deps) → source
   tarballs stop being sufficient and releases need real artifacts.
+- Releases are cut by anyone but me, or the account/CI that can push tags is shared →
+  the unsigned-tarball trust model in (c) needs revisiting (signing, or pinned SHAs in
+  a reviewed manifest).
+- A settings-page peer on the LAN stops being trusted (shared flat, guest WiFi) →
+  add the flash-time admin passphrase noted in (b).
 - More than a handful of signs, or signs on networks I don't control.

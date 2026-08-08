@@ -219,7 +219,10 @@ class Launcher:
     # ------------------------------------------------------------------
     def _compose(self, frame):
         """A finished frame -> what actually hits the panels: RGB, with any
-        system overlays (no-wifi icon, setup PIN) drawn on top."""
+        system overlays (no-wifi icon, setup PIN) composited on top."""
+        # convert() to the same mode returns a *copy*, which is load-bearing:
+        # overlays composite in place, and an app may hand us a cached/pre-
+        # rendered Image — without this copy the overlay would burn into it.
         frame = frame.convert("RGB")
         if self.overlays:
             frame = self.overlays.compose(frame)
