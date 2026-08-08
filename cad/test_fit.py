@@ -277,6 +277,36 @@ else:
           n_steps == n_stages,
           f"{n_steps} steps but {n_stages} entries in GROUP_BY_STEP — "
           f"the model illustrates the wrong step from the mismatch onward")
+
+    # The stage numbers live in three places that must agree: the step map, the
+    # parts table, and the reduced-motion rest pose. Each was edited by hand.
+    stage_nums = [int(n) for n in
+                  re.findall(r"\d+", re.sub(r"//[^\n]*", "", gbs.group(1)))] \
+        if gbs else []
+    parts = re.search(r"var PARTS = \[(.*?)\n      \];", sheet, re.S)
+    body = parts.group(1) if parts else ""
+    appears = [int(n) for n in re.findall(r"\bg:\s*(\d+)", body)]
+    seats = [int(n) for n in re.findall(r"\bgi:\s*(\d+)", body)]
+    mids = [int(n) for n in re.findall(r"\bmid:\s*\[\s*(\d+)", body)]
+    rest = re.search(r"place\(reduced \? (\d+) : 0\)", sheet)
+    top_step = max(stage_nums) if stage_nums else -1
+    top_part = max(appears + seats + mids) if appears else -1
+
+    check("the last step lands on the last stage",
+          top_step == top_part,
+          f"steps run to stage {top_step} but the parts table to {top_part}")
+    check("reduced motion rests on the finished sign",
+          rest is not None and int(rest.group(1)) == top_part,
+          f"rests at {rest.group(1) if rest else 'nothing'}, "
+          f"but the build finishes at {top_part}")
+    # A stage nothing happens in is a stretch of text with a frozen drawing —
+    # the thing this whole animation exists to avoid.
+    active = set(appears) | set(seats) | set(mids)
+    idle = [s for s in range(1, top_part + 1) if s not in active]
+    check("every stage moves something",
+          not idle,
+          f"stage(s) {idle} introduce and move nothing — the model freezes "
+          f"while the steps keep scrolling")
     # The guide used to say "screw a flat L-bracket across each inside corner",
     # which at 2 mm would foul panels that have 1.67 mm a side. Geometry alone
     # cannot catch prose, so check the prose.
