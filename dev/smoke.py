@@ -127,8 +127,12 @@ post("/config", config="matrix:\n  rows: 32\n  cols: 32\n")
 with open(cfg_path, encoding="utf-8") as fh:
     check("valid YAML is written", "rows: 32" in fh.read())
 check("save triggers a restart", restarts == [1])
+with open(cfg_path + ".prev", encoding="utf-8") as fh:
+    check("atomic write keeps the previous config as .prev", "rows: 64" in fh.read())
 
 os.unlink(cfg_path)
+if os.path.exists(cfg_path + ".prev"):
+    os.unlink(cfg_path + ".prev")
 
 # --- launcher survives a broken app -----------------------------------------
 # Regression: an app whose layout assumed a 64-row canvas raised every frame

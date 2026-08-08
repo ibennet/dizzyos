@@ -12,9 +12,11 @@ dev (no systemd) it just tells you to restart by hand.
 """
 
 import html
+import os
 import secrets
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -48,9 +50,28 @@ def _now():
     return time.monotonic()
 
 
+def _basic_validate(cfg):
+    """Minimal 'is this a dizzyos config' check — the default when the caller
+    injects nothing (dev, tests). run.py passes a stricter validator that
+    exercises the real boot path so the page can't save a config that would
+    send the sign into a restart loop. Returns None if OK, else a reason."""
+    if not isinstance(cfg, dict) or "matrix" not in cfg:
+        return "this doesn't look like a dizzyos config"
+    m = cfg["matrix"]
+    if not isinstance(m, dict):
+        return "matrix: must be a mapping"
+    for key in ("rows", "cols"):
+        if not isinstance(m.get(key), int) or m[key] <= 0:
+            return f"matrix.{key} must be a positive integer"
+    for key in ("chain", "parallel"):
+        if key in m and not isinstance(m[key], int):
+            return f"matrix.{key} must be an integer"
+    return None
+
+
 class SettingsServer:
     def __init__(self, config_path, overlays, fonts, log, version="dev",
-                 port=8080, restart=None):
+                 port=8080, restart=None, validate=None):
         self.config_path = config_path
         self.overlays = overlays
         self.fonts = fonts
@@ -60,6 +81,9 @@ class SettingsServer:
         # How a config save takes effect. Default: systemd restart on the Pi,
         # a log line in dev. Injectable for tests.
         self.restart = restart if restart is not None else self._default_restart
+        # Whether a candidate config is safe to write. Default is a shape check;
+        # run.py injects one that walks the real load path (see validate_config).
+        self.validate = validate if validate is not None else _basic_validate
         self._pin = None            # (pin, expires_at, attempts_left)
         self._sessions = {}         # token -> expires_at
         self._flash = {}            # token -> one-shot status message (msg, ok)
@@ -116,12 +140,39 @@ class SettingsServer:
             parsed = yaml.safe_load(text)
         except yaml.YAMLError as exc:
             return f"not saved — invalid YAML: {exc}", False
-        if not isinstance(parsed, dict) or "matrix" not in parsed:
-            return "not saved — this doesn't look like a dizzyos config", False
-        with open(self.config_path, "w", encoding="utf-8") as fh:
-            fh.write(text)
+        reason = self.validate(parsed)
+        if reason:
+            # Rejected before the file is touched: a saved config that can't
+            # boot would restart-loop with the recovery page unreachable.
+            return f"not saved — {reason}", False
+        try:
+            self._atomic_write(text)
+        except OSError as exc:
+            return f"not saved — could not write config ({exc})", False
         self.log("settings: config.yaml updated via LAN settings page")
         return self.restart(), True
+
+    def _atomic_write(self, text):
+        """Write config.yaml so a crash or power cut can't leave a truncated
+        file: keep the previous good copy as `.prev`, write a sibling tempfile,
+        then os.replace() it into place (atomic on the same filesystem)."""
+        path = self.config_path
+        directory = os.path.dirname(os.path.abspath(path)) or "."
+        if os.path.exists(path):
+            shutil.copy2(path, path + ".prev")
+        fd, tmp = tempfile.mkstemp(dir=directory, prefix=".config-", suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(text)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
     def join_wifi(self, ssid, password):
         if not shutil.which("nmcli"):

@@ -13,6 +13,21 @@ echo "dizzyos firstrun: $(date)"
 
 BOOT=/boot/firmware
 
+# If a previous run already succeeded, don't run again — just boot on. (On
+# success we strip the cmdline hook and delete this script, so normally we
+# never get here twice; the marker is the belt-and-braces guard.)
+if [ -f "$BOOT/dizzyos-provisioned" ]; then
+  echo "already provisioned; nothing to do"
+  exit 0
+fi
+
+# Any command failing under `set -e` jumps here: log where, then reboot anyway.
+# Without this, an errexit under systemd.run (whose success_action=reboot never
+# fires on failure) leaves the Pi wedged in the run unit — no console, no SSH,
+# no WiFi, a re-flash. Rebooting instead retries first boot from the top, and
+# because we only remove the cmdline hook on success, the retry re-runs us.
+trap 'rc=$?; echo "firstrun FAILED (rc=$rc) near line ${LINENO}"; sync; reboot; exit $rc' ERR
+
 # --- hostname ---------------------------------------------------------------
 echo "{{HOSTNAME}}" > /etc/hostname
 sed -i "s/127\.0\.1\.1.*/127.0.1.1\t{{HOSTNAME}}/" /etc/hosts
@@ -100,9 +115,20 @@ ln -sf /etc/systemd/system/dizzyos-bootstrap.service \
 
 # --- clean up after ourselves ----------------------------------------------
 # Strip the one-shot systemd.run hook from cmdline.txt (keep isolcpus etc.)
-# and remove the secrets this script carried.
+# and remove the secrets this script carried. Verify the strip took *before*
+# deleting firstrun.sh: if the hook token somehow survived (whitespace/CRLF
+# drift in a future image), deleting the script would make the next boot try to
+# systemd.run a file that's gone and fail to boot. In that case leave the
+# payload in place and reboot to retry, rather than commit an unbootable card.
 sed -i 's| systemd\.run=[^ ]*||; s| systemd\.run_success_action=[^ ]*||; s| systemd\.unit=kernel-command-line\.target||' "$BOOT/cmdline.txt"
+if grep -q 'systemd\.run=' "$BOOT/cmdline.txt"; then
+  echo "firstrun: cmdline hook survived the strip; leaving payload for retry"
+  sync; reboot; exit 1
+fi
 rm -rf "$BOOT/dizzyos" "$BOOT/firstrun.sh"
 
+# Mark success only now that everything above ran clean. From here the hook is
+# gone, so the next boot is a normal boot into the (network-gated) bootstrap.
+touch "$BOOT/dizzyos-provisioned"
 echo "dizzyos firstrun: done"
 exit 0

@@ -207,7 +207,7 @@ EOF
 # thread, the WiFi regulatory domain (what rpi-imager does), and the one-shot
 # firstrun hook (removed by firstrun.sh itself once it has run).
 CMDLINE="$(cat "$BOOT/cmdline.txt")"
-printf '%s isolcpus=3 cfg80211.ieee80211_regdom=%s systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.unit=kernel-command-line.target\n' \
+printf '%s isolcpus=3 cfg80211.ieee80211_regdom=%s systemd.run=/boot/firmware/firstrun.sh systemd.run_success_action=reboot systemd.run_failure_action=reboot systemd.unit=kernel-command-line.target\n' \
   "$CMDLINE" "$WIFI_COUNTRY" > "$BOOT/cmdline.txt"
 
 # inject: cloud-init network config (Trixie images provision networking via

@@ -12,6 +12,7 @@ display, so you can eyeball the output (or diff it) before wiring up hardware.
 import argparse
 import os
 import sys
+import threading
 
 import yaml
 
@@ -27,6 +28,59 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 def load_config(path):
     with open(path, "r", encoding="utf-8") as handle:
         return yaml.safe_load(handle)
+
+
+def validate_config(cfg):
+    """Return None if `cfg` is safe to boot, else a human-readable reason.
+
+    Walks the same paths run.py uses — canvas sizing and rotation app lookup —
+    so the LAN settings page (which injects this as its validator) cannot save a
+    config that would crash the launcher and, with `Restart=always`, spin the
+    sign in a restart loop with no way back in.
+    """
+    if not isinstance(cfg, dict) or "matrix" not in cfg:
+        return "this doesn't look like a dizzyos config"
+    m = cfg["matrix"]
+    if not isinstance(m, dict):
+        return "matrix: must be a mapping"
+    for key in ("rows", "cols"):
+        if not isinstance(m.get(key), int) or m[key] <= 0:
+            return f"matrix.{key} must be a positive integer"
+    for key in ("chain", "parallel"):
+        if key in m and (not isinstance(m[key], int) or m[key] <= 0):
+            return f"matrix.{key} must be a positive integer"
+    try:
+        display_mod.canvas_size(cfg)
+    except (KeyError, TypeError) as exc:
+        return f"matrix block is invalid ({exc})"
+    rotation = (cfg.get("launcher") or {}).get("rotation", [])
+    if not isinstance(rotation, list) or not rotation:
+        return "launcher.rotation must list at least one app"
+    for name in rotation:
+        if not os.path.isfile(os.path.join(APPS_DIR, str(name), "app.py")):
+            return (f"launcher.rotation names unknown app '{name}' "
+                    f"(have: {', '.join(available_apps()) or 'none'})")
+    return None
+
+
+def load_config_with_fallback(path, log, validate=True):
+    """Load config, falling back to the `.prev` copy the settings page keeps if
+    the primary file is missing/corrupt/unbootable. A power cut mid-save, or a
+    hand-edit that doesn't boot, then costs a reboot to the last good config
+    rather than a re-flash."""
+    try:
+        cfg = load_config(path)
+        if validate:
+            reason = validate_config(cfg)
+            if reason:
+                raise ValueError(reason)
+        return cfg
+    except Exception as exc:  # noqa: BLE001 - any load/parse/validate failure
+        prev = path + ".prev"
+        if os.path.exists(prev):
+            log(f"config: {path} unusable ({exc}); falling back to {prev}")
+            return load_config(prev)
+        raise
 
 
 def apply_overrides(cfg, args):
@@ -45,9 +99,9 @@ def apply_overrides(cfg, args):
         m["pixel_mapper_config"] = args.led_pixel_mapper
 
 
-def build_services(cfg, log):
+def build_services(cfg, log, fonts=None):
     width, height = display_mod.canvas_size(cfg)
-    fonts = FontBook(os.path.join(ROOT, "fonts"))
+    fonts = fonts or FontBook(os.path.join(ROOT, "fonts"))
     return Services(width=width, height=height, data=DataService(log=log), fonts=fonts, log=log)
 
 
@@ -80,6 +134,23 @@ def selected_names(cfg, args):
 def select_apps(cfg, args):
     """Load the apps to run live: a single `--app`, or the full rotation."""
     return [load_named_app(cfg, name) for name in selected_names(cfg, args)]
+
+
+def select_apps_safe(cfg, args, log):
+    """Like select_apps, but a bad/missing app is logged and skipped rather than
+    calling sys.exit — the live launcher must not die (and restart-loop) over one
+    typo'd rotation entry. Returns whatever loaded; the launcher renders its own
+    fallback frame if that's nothing, keeping the settings page reachable."""
+    apps = []
+    for name in selected_names(cfg, args):
+        if not os.path.isfile(os.path.join(APPS_DIR, name, "app.py")):
+            log(f"launcher: skipping unknown app '{name}'")
+            continue
+        try:
+            apps.append(load_app(name, cfg.get("apps", {}).get(name, {})))
+        except Exception as exc:  # noqa: BLE001 - one app's failure isn't fatal
+            log(f"launcher: failed to load '{name}': {exc}")
+    return apps
 
 
 def dump_frames(cfg, args, log):
@@ -123,13 +194,15 @@ def main():
     parser.add_argument("--menu-url", help="override the cafe_menu feed URL/path")
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
+    def log(message):
+        print(message, file=sys.stderr)
+
+    # A live boot validates and can fall back to the last-good `.prev` config; a
+    # single-app dev preview (--app) skips that so a throwaway config still runs.
+    cfg = load_config_with_fallback(args.config, log, validate=not args.app)
     apply_overrides(cfg, args)
     if args.menu_url:  # applies to both the live launcher and --dump-frames
         cfg.setdefault("apps", {}).setdefault("cafe_menu", {})["menu_url"] = args.menu_url
-
-    def log(message):
-        print(message, file=sys.stderr)
 
     if args.dump_frames:
         dump_frames(cfg, args, log)
@@ -141,26 +214,35 @@ def main():
     from kernel.overlay import OverlayManager
     from kernel.settings import SettingsServer
 
-    apps = select_apps(cfg, args)  # validate/load apps before spinning up the matrix
-    matrix = display_mod.create_matrix(cfg)
-    services = build_services(cfg, log)
-
-    # System layer: status overlays composed over every app frame, the
-    # network monitor that drives the no-wifi icon, and the PIN-gated LAN
-    # settings page. Each is opt-out via the `system:` block in config.yaml.
-    system = cfg.get("system") or {}
+    # System layer first — before the matrix and apps. The status overlays and
+    # the PIN-gated LAN settings page must come up even if the display or an app
+    # fails to build, so a bad config is always recoverable over the network
+    # rather than by pulling the SD card. Each is opt-out via `system:` in config.
+    fonts = FontBook(os.path.join(ROOT, "fonts"))
     overlays = OverlayManager()
+    system = cfg.get("system") or {}
     if system.get("network_monitor", True):
         NetworkMonitor(overlays, log).start()
     settings_cfg = system.get("settings") or {}
     if settings_cfg.get("enabled", True):
         try:
-            SettingsServer(args.config, overlays, services.fonts, log,
+            SettingsServer(args.config, overlays, fonts, log,
                            version=__version__,
-                           port=settings_cfg.get("port", 8080)).start()
+                           port=settings_cfg.get("port", 8080),
+                           validate=validate_config).start()
         except OSError as exc:  # port taken (e.g. second dev instance) — not fatal
             log(f"settings: disabled ({exc})")
 
+    try:
+        matrix = display_mod.create_matrix(cfg)
+    except Exception as exc:  # noqa: BLE001 - hold, don't exit into a restart loop
+        log(f"display: could not build the matrix ({exc}); holding with the "
+            "settings page up so the config can be fixed over the network")
+        threading.Event().wait()
+        return
+
+    services = build_services(cfg, log, fonts=fonts)
+    apps = select_apps_safe(cfg, args, log)
     log(f"dizzyos up: {display_mod.canvas_size(cfg)} canvas, apps={[a.name for a in apps]}")
     try:
         Launcher(matrix, apps, cfg, services, overlays=overlays).run()

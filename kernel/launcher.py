@@ -11,7 +11,7 @@ import os
 import threading
 import time
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 #: Transition styles selectable via `launcher.transition` in config.yaml.
 TRANSITIONS = ("crossfade", "slide", "wipe", "blank_wipe", "cut_wipe", "none")
@@ -77,8 +77,9 @@ def compose_transition(style, last, nxt, alpha):
 class Launcher:
     def __init__(self, matrix, apps, cfg, services, overlays=None,
                  clock=time.monotonic, sleep=time.sleep):
-        if not apps:
-            raise ValueError("launcher needs at least one app")
+        # An empty app list is not fatal: the run loop holds on a kernel
+        # fallback frame (keeping overlays and the settings page alive) rather
+        # than crashing the process into a restart loop.
         self.matrix = matrix
         self.apps = apps
         self.services = services
@@ -99,6 +100,12 @@ class Launcher:
     def run(self):
         """Run forever, cycling through apps. Ctrl-C to stop."""
         canvas = self.matrix.CreateFrameCanvas()
+        if not self.apps:
+            # Nothing loaded (e.g. every rotation entry was bad). Hold on the
+            # fallback frame so overlays stay visible and the sign is fixable
+            # via the settings page, instead of exiting into a restart loop.
+            while True:
+                canvas = self._render_fallback(canvas, ["no apps", "fix at :8080"])
         index = 0
         while True:
             app = self.apps[index]
@@ -110,7 +117,7 @@ class Launcher:
 
     # ------------------------------------------------------------------
     def _run_app(self, app, canvas):
-        app.on_start(self.services)
+        self._safe(app, "on_start", self.services)
         stop_refresh = self._start_refresh(app)
         try:
             start = self.clock()
@@ -118,16 +125,30 @@ class Launcher:
             frame_time = 1.0 / self.target_fps
             while (self.clock() - start) < dwell:
                 frame = self._render(app, self.clock() - start)
-                if frame is None:  # app is broken — give its turn back
-                    break
+                if frame is None:  # app is broken — show the fallback, don't
+                    # hot-spin: _render_fallback paces itself, so a rotation of
+                    # all-broken apps stays at the frame rate rather than pegging
+                    # the CPU and churning refresh threads.
+                    canvas = self._render_fallback(canvas, [app.name, "not rendering"])
+                    continue
                 canvas.SetImage(self._compose(frame))
                 canvas = self.matrix.SwapOnVSync(canvas)
                 self._beat()
                 self.sleep(frame_time)
         finally:
             stop_refresh.set()
-            app.on_stop()
+            self._safe(app, "on_stop")
         return canvas
+
+    def _safe(self, app, method, *args):
+        """Call an app lifecycle hook (on_start/refresh/on_stop), swallowing and
+        logging any exception. One app's bug must cost only its slot in the
+        rotation, not the whole sign — the rule _render applies to render()."""
+        try:
+            return getattr(app, method)(*args)
+        except Exception as exc:  # noqa: BLE001 - any app's bug, not just ours
+            self.services.log(f"{app.name}: {method} failed: {exc}")
+            return None
 
     def _render(self, app, t):
         """One frame from `app`, or None if it raised.
@@ -147,10 +168,7 @@ class Launcher:
 
     def _start_refresh(self, app):
         """Refresh once now, then re-refresh in the background on the app's interval."""
-        try:
-            app.refresh()
-        except Exception as exc:  # noqa: BLE001 - same rule as _render
-            self.services.log(f"{app.name}: initial refresh failed: {exc}")
+        self._safe(app, "refresh")
         stop = threading.Event()
         interval = app.refresh_interval
         if interval:
@@ -172,14 +190,16 @@ class Launcher:
             self.services.log(
                 f"launcher: unknown transition {self.transition!r}, using crossfade"
             )
-        incoming.on_start(self.services)
-        incoming.refresh()
+        # Same guarantee as _start_refresh: a bad app at the transition boundary
+        # (raising in on_start or refresh) must not take the whole sign down.
+        self._safe(incoming, "on_start", self.services)
+        self._safe(incoming, "refresh")
         frame_time = 1.0 / self.target_fps
         duration = self.transition_ms / 1000.0
         steps = max(int(duration * self.target_fps), 1)
         last = self._render(outgoing, outgoing.dwell or self.default_dwell)
         if last is None:  # nothing to transition from — cut straight over
-            incoming.on_stop()
+            self._safe(incoming, "on_stop")
             return canvas
         last = last.convert("RGB")
         for i in range(1, steps + 1):
@@ -193,7 +213,7 @@ class Launcher:
             canvas = self.matrix.SwapOnVSync(canvas)
             self._beat()
             self.sleep(frame_time)
-        incoming.on_stop()  # will be re-started by the next _run_app
+        self._safe(incoming, "on_stop")  # will be re-started by the next _run_app
         return canvas
 
     # ------------------------------------------------------------------
@@ -204,6 +224,28 @@ class Launcher:
         if self.overlays:
             frame = self.overlays.compose(frame)
         return frame
+
+    def _render_fallback(self, canvas, lines):
+        """Draw a kernel-owned frame (a short centered message) and push it,
+        self-paced at the frame rate. Used when no app is rendering — an empty
+        rotation, or every app broken — so the panel keeps refreshing and any
+        no-wifi / setup-PIN overlay stays visible instead of the sign going dark
+        or the loop hot-spinning."""
+        from .pixelfont import GLYPH_H
+        frame = Image.new("RGB", (self.services.width, self.services.height), "black")
+        font = self.services.fonts.pixel()
+        draw = ImageDraw.Draw(frame)
+        total_h = len(lines) * GLYPH_H + (len(lines) - 1) * 2
+        y = max((frame.height - total_h) // 2, 0)
+        for line in lines:
+            w = font.measure(line)
+            font.draw_text(draw, max((frame.width - w) // 2, 0), y, line, (120, 120, 130))
+            y += GLYPH_H + 2
+        canvas.SetImage(self._compose(frame))
+        canvas = self.matrix.SwapOnVSync(canvas)
+        self._beat()
+        self.sleep(1.0 / self.target_fps)
+        return canvas
 
     def _beat(self):
         """Prove liveness to dizzyos-update (see heartbeat_path above)."""

@@ -9,18 +9,36 @@
 # dizzyos-update on a timer.
 
 set -euo pipefail
-exec > /var/log/dizzyos-bootstrap.log 2>&1
+# Tee to the FAT boot partition as well as /var/log: a failed bootstrap is
+# invisible over the network (no driver, maybe no WiFi), so the one artifact
+# explaining it must be readable by pulling the card into any laptop.
+exec > >(tee -a /boot/firmware/dizzyos-bootstrap.log /var/log/dizzyos-bootstrap.log) 2>&1
 echo "dizzyos bootstrap: $(date)"
 
 ROOT=/opt/dizzyos
 PAYLOAD=$ROOT/payload
+# ABI pin for the compiled matrix shim below — MUST match Pillow== in
+# requirements-pi.txt, or a release install will downgrade Pillow out from
+# under the shim compiled here and the driver will fail to import.
+PILLOW="Pillow==10.4.0"
+
+# Any failure self-heals by rebooting: bootstrap only disables itself on
+# success, so the next boot re-runs it. This turns a transient failure (WiFi
+# AP slow to come up after a power cut, a flaky mirror) into a slow retry loop
+# that recovers on its own, instead of a sign that stays dark forever. The
+# delay keeps it from hammering; the tee'd log above records why.
+fail() { echo "bootstrap FAILED: $*"; sync; sleep 60; systemctl reboot; exit 1; }
+trap 'fail "error near line ${LINENO}"' ERR
 
 # Wait for actual connectivity — network-online.target can be satisfied
-# before WiFi has an address.
+# before WiFi has an address. A hard gate: proceeding offline just guarantees
+# apt fails a few lines down, so retry instead.
+online=""
 for i in $(seq 1 60); do
-  if curl -fsI --max-time 5 https://github.com >/dev/null 2>&1; then break; fi
+  if curl -fsI --max-time 5 https://github.com >/dev/null 2>&1; then online=1; break; fi
   echo "waiting for network ($i)"; sleep 5
 done
+[ -n "$online" ] || fail "no network after ~5 min"
 
 # --- packages ---------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
@@ -44,7 +62,7 @@ if ! "$ROOT/venv/bin/python" -c 'import rgbmatrix' 2>/dev/null; then
   # is no build-python make target), and unconditionally compiles a Pillow
   # shim that needs Imaging.h. Those headers exist only in Pillow's source
   # tree, never in the wheel, so fetch them for the installed version.
-  "$ROOT/venv/bin/pip" install --upgrade Pillow
+  "$ROOT/venv/bin/pip" install "$PILLOW"
   if [ ! -f "$PIL_INC/Imaging.h" ]; then
     VER=$("$ROOT/venv/bin/python" -c 'import PIL; print(PIL.__version__)')
     rm -rf /tmp/pilsrc "$PIL_INC"; mkdir -p /tmp/pilsrc "$PIL_INC"

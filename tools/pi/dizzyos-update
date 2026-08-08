@@ -26,6 +26,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.request
 
 ROOT = "/opt/dizzyos"
@@ -35,6 +36,7 @@ CONF = "/etc/dizzyos/update.conf"
 HEARTBEAT = "/run/dizzyos/heartbeat"
 HEALTH_TIMEOUT = 90     # seconds to wait for a fresh heartbeat after restart
 KEEP = 2                # prior releases retained for rollback
+PENDING = os.path.join(RELEASES, ".pending")  # in-flight deploy record (crash-safe)
 
 
 def log(msg):
@@ -135,21 +137,30 @@ def flip(name):
     os.replace(tmp, CURRENT)
 
 
+def clear_heartbeat():
+    """Remove the heartbeat file so `healthy()` waits for the *new* process to
+    recreate it. This is what lets the health check use plain existence instead
+    of comparing mtimes against wall-clock — the Pi has no RTC, so an NTP step
+    during the deploy could otherwise make a fresh beat look stale and trigger a
+    false rollback."""
+    try:
+        os.unlink(HEARTBEAT)
+    except FileNotFoundError:
+        pass
+
+
 def restart():
     subprocess.run(["systemctl", "restart", "dizzyos"], check=True)
 
 
-def healthy(since):
-    """Wait for the kernel to prove it is rendering: a heartbeat newer than
-    the flip. `Restart=always` would happily loop a crashing release forever,
-    which is exactly why this check exists."""
+def healthy():
+    """Wait for the kernel to prove it is rendering: the heartbeat reappears
+    after we cleared it (see clear_heartbeat). `Restart=always` would happily
+    loop a crashing release forever, which is exactly why this check exists."""
     deadline = time.monotonic() + HEALTH_TIMEOUT
     while time.monotonic() < deadline:
-        try:
-            if os.stat(HEARTBEAT).st_mtime >= since:
-                return True
-        except FileNotFoundError:
-            pass
+        if os.path.exists(HEARTBEAT):
+            return True
         time.sleep(3)
     return False
 
@@ -164,6 +175,56 @@ def prune():
         if tag not in keep:
             log(f"pruning old release {tag}")
             shutil.rmtree(os.path.join(RELEASES, tag))
+
+
+def rollback(prev, reason):
+    """Flip back to `prev` — code *and* its pinned deps — and restart. Because
+    the venv is shared across releases, reinstalling the previous release's
+    pinned requirements undoes any dependency the failed release pulled in, so
+    the rollback restores the whole deploy, not just the source symlink."""
+    log(f"rolling back to {prev}: {reason}")
+    flip(prev)
+    pip_install(os.path.join(RELEASES, prev))
+    clear_heartbeat()
+    restart()
+
+
+def mark_bad(tag, reason):
+    """Two-strike marking: a single failed health check (a slow first data
+    refresh, WiFi still associating after the restart) only records a strike and
+    is retried on the next timer; a second consecutive failure writes `.bad`
+    (with the reason) so the tag is never retried automatically."""
+    strike = os.path.join(RELEASES, tag + ".strike")
+    if os.path.exists(strike):
+        with open(os.path.join(RELEASES, tag + ".bad"), "w", encoding="utf-8") as fh:
+            fh.write(f"{reason}\n")
+        os.remove(strike)
+        log(f"{tag}: {reason} — second failure, marked bad")
+    else:
+        open(strike, "w").close()
+        log(f"{tag}: {reason} — first failure, will retry next timer")
+
+
+def reconcile_pending():
+    """Recover from a deploy interrupted (power loss, OOM kill) between the flip
+    and the health check. `.pending` records `<new> <prev>`; if we're sitting on
+    the interrupted release, re-verify it now and roll back if it isn't
+    rendering — otherwise the interrupted release would be accepted unchecked."""
+    if not os.path.exists(PENDING):
+        return
+    with open(PENDING, encoding="utf-8") as fh:
+        parts = fh.read().split()
+    os.remove(PENDING)
+    new = parts[0] if parts else None
+    prev = parts[1] if len(parts) > 1 else None
+    if not new or current_tag() != new:
+        return
+    log(f"reconciling interrupted deploy of {new}")
+    if healthy():
+        log(f"{new} is healthy after the interrupted deploy")
+    elif prev:
+        mark_bad(new, "no heartbeat after interrupted deploy")
+        rollback(prev, "interrupted deploy left a non-rendering release")
 
 
 def refresh_payload(release_dir):
@@ -188,6 +249,10 @@ def main():
     force = "--force" in sys.argv
     values = conf()
     repo = values["REPO"]
+
+    # First, recover any deploy that a power loss interrupted mid-flip.
+    if os.path.isdir(RELEASES):
+        reconcile_pending()
 
     if values.get("REF"):
         # Dev pin: REF=<branch> in update.conf installs that branch instead
@@ -225,20 +290,38 @@ def main():
     pip_install(release_dir)
     warm_font_cache(release_dir)
 
-    log(f"flipping {prev or '(none)'} -> {tag}")
-    flip_time = time.time()
-    flip(tag)
-    restart()
+    # Record the in-flight deploy *before* touching `current`. If power is lost
+    # between the flip and the health check, reconcile_pending() (next run) sees
+    # this and re-verifies, rather than the already-on-tag shortcut accepting an
+    # unchecked release.
+    os.makedirs(RELEASES, exist_ok=True)
+    with open(PENDING, "w", encoding="utf-8") as fh:
+        fh.write(f"{tag} {prev or ''}")
 
-    if not healthy(flip_time):
+    log(f"flipping {prev or '(none)'} -> {tag}")
+    try:
+        clear_heartbeat()
+        flip(tag)
+        restart()
+        ok = healthy()
+    except BaseException as exc:  # noqa: BLE001 - any failure must still roll back
+        log(f"deploy of {tag} raised: {exc}")
+        ok = False
+
+    if not ok:
         log(f"HEALTH CHECK FAILED for {tag}")
-        open(os.path.join(RELEASES, tag + ".bad"), "w").close()
+        mark_bad(tag, "no heartbeat after deploy")
         if prev:
-            log(f"rolling back to {prev}")
-            flip(prev)
-            restart()
+            rollback(prev, "new release did not render")
+        if os.path.exists(PENDING):
+            os.remove(PENDING)
         return 1
 
+    if os.path.exists(PENDING):
+        os.remove(PENDING)
+    strike = os.path.join(RELEASES, tag + ".strike")
+    if os.path.exists(strike):
+        os.remove(strike)  # a good deploy clears any earlier transient strike
     log(f"{tag} is up and rendering")
     refresh_payload(release_dir)
     prune()

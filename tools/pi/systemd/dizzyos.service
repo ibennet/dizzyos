@@ -8,6 +8,10 @@
 Description=dizzyos LED matrix sign
 After=network-online.target
 Wants=network-online.target
+# Retry forever: the default start limit (5 starts / 10s) would give up and
+# leave the sign dark exactly in a transient crash loop (a flaky call at
+# startup). The updater's health check — not systemd — decides a release is bad.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
