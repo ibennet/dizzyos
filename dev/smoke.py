@@ -129,4 +129,62 @@ with open(cfg_path, encoding="utf-8") as fh:
 check("save triggers a restart", restarts == [1])
 
 os.unlink(cfg_path)
+
+# --- launcher survives a broken app -----------------------------------------
+# Regression: an app whose layout assumed a 64-row canvas raised every frame
+# on a 32-row one and took the whole service down, so systemd restart-looped
+# and NO app rendered. One bad app must cost one slot, not the sign.
+print("launcher resilience")
+from kernel.app import App
+from kernel.launcher import Launcher
+
+
+class FakeCanvas:
+    def SetImage(self, img):
+        self.last = img
+
+
+class FakeMatrix:
+    def CreateFrameCanvas(self):
+        return FakeCanvas()
+
+    def SwapOnVSync(self, canvas):
+        return canvas
+
+
+class BrokenApp(App):
+    name = "broken"
+
+    def render(self, t):
+        raise ValueError("y1 must be greater than or equal to y0")
+
+
+class GoodApp(App):
+    name = "good"
+
+    def __init__(self):
+        super().__init__()
+        self.frames = 0
+
+    def render(self, t):
+        self.frames += 1
+        return Image.new("RGB", (128, 32), "blue")
+
+
+logged = []
+services = type("S", (), {"width": 128, "height": 32, "fonts": FONTS,
+                          "log": logged.append})()
+good = GoodApp()
+ticks = [0.0]
+launcher = Launcher(FakeMatrix(), [BrokenApp(), good], {"launcher": {"default_dwell": 1,
+                    "target_fps": 4, "transition": "none"}}, services,
+                    clock=lambda: ticks[0], sleep=lambda s: ticks.__setitem__(0, ticks[0] + s))
+
+canvas = launcher._run_app(BrokenApp(), FakeCanvas())
+check("broken app does not raise out of the launcher", canvas is not None)
+check("broken app is logged", any("render failed" in m for m in logged))
+ticks[0] = 0.0
+launcher._run_app(good, FakeCanvas())
+check("a good app still renders after a broken one", good.frames > 0)
+
 print(f"\nsmoke: all {passed} checks passed")

@@ -117,7 +117,10 @@ class Launcher:
             dwell = app.dwell or self.default_dwell
             frame_time = 1.0 / self.target_fps
             while (self.clock() - start) < dwell:
-                canvas.SetImage(self._compose(app.render(self.clock() - start)))
+                frame = self._render(app, self.clock() - start)
+                if frame is None:  # app is broken — give its turn back
+                    break
+                canvas.SetImage(self._compose(frame))
                 canvas = self.matrix.SwapOnVSync(canvas)
                 self._beat()
                 self.sleep(frame_time)
@@ -126,9 +129,28 @@ class Launcher:
             app.on_stop()
         return canvas
 
+    def _render(self, app, t):
+        """One frame from `app`, or None if it raised.
+
+        A broken app must not take the whole sign down. Found on hardware: an
+        app whose layout assumed a 64-row canvas raised on every frame of a
+        32-row one, killing the process — and `Restart=always` turned that
+        into an endless restart loop where the other two apps never rendered
+        either. Skipping the app costs one slot in the rotation; crashing
+        costs the whole sign.
+        """
+        try:
+            return app.render(t)
+        except Exception as exc:  # noqa: BLE001 - any app's bug, not just ours
+            self.services.log(f"{app.name}: render failed, skipping its turn: {exc}")
+            return None
+
     def _start_refresh(self, app):
         """Refresh once now, then re-refresh in the background on the app's interval."""
-        app.refresh()
+        try:
+            app.refresh()
+        except Exception as exc:  # noqa: BLE001 - same rule as _render
+            self.services.log(f"{app.name}: initial refresh failed: {exc}")
         stop = threading.Event()
         interval = app.refresh_interval
         if interval:
@@ -155,10 +177,17 @@ class Launcher:
         frame_time = 1.0 / self.target_fps
         duration = self.transition_ms / 1000.0
         steps = max(int(duration * self.target_fps), 1)
-        last = outgoing.render(outgoing.dwell or self.default_dwell).convert("RGB")
+        last = self._render(outgoing, outgoing.dwell or self.default_dwell)
+        if last is None:  # nothing to transition from — cut straight over
+            incoming.on_stop()
+            return canvas
+        last = last.convert("RGB")
         for i in range(1, steps + 1):
             alpha = i / steps
-            nxt = incoming.render(alpha * duration).convert("RGB")
+            nxt = self._render(incoming, alpha * duration)
+            if nxt is None:  # broken incoming app; _run_app will skip it too
+                break
+            nxt = nxt.convert("RGB")
             frame = compose_transition(self.transition, last, nxt, alpha)
             canvas.SetImage(self._compose(frame))
             canvas = self.matrix.SwapOnVSync(canvas)
