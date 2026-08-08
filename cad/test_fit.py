@@ -32,6 +32,21 @@ def check(name, condition, detail=""):
 
 c = CASE
 
+print("the seam between panels")
+# The one dimension with no tolerance at all. Pixels sit half a pitch in from
+# each panel edge, so butted panels continue the grid across the seam at exactly
+# one pitch; a gap shows as a dead stripe through the middle of every frame.
+check("panels butt with no gap",
+      c.panel_gap == 0,
+      f"panel_gap {c.panel_gap} mm — the pixel grid breaks at the seam")
+check("the seam keeps the pixel pitch",
+      abs((c.panels_width / (c.canvas_pixels[0])) - c.panel.pitch) < 1e-9,
+      f"effective pitch {c.panels_width / c.canvas_pixels[0]:.4f} mm "
+      f"vs panel pitch {c.panel.pitch} mm")
+check("canvas matches what the kernel renders",
+      c.canvas_pixels == (128, 64),
+      f"canvas {c.canvas_pixels} — config.yaml expects 128x64")
+
 print("panel block in the opening")
 check("panels fit the opening width",
       c.opening_width >= c.panels_width,

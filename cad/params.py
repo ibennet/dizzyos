@@ -122,19 +122,33 @@ class Case:
     electronics: Electronics = Electronics()
     panels_x: int = 2           # chained side by side
     panels_y: int = 1
-    #: Total slack between the panel block and the frame opening, per axis.
-    #: Small enough that the panels cannot wander, large enough to absorb a
-    #: saw kerf and seasonal movement in the wood.
+    #: Gap between adjacent panels. MUST be zero. Pixels sit half a pitch in
+    #: from each panel edge, so butted panels continue the grid across the seam
+    #: at exactly one pitch; any gap at all shows as a dead stripe through the
+    #: middle of every frame, and the kernel renders text straight across it.
+    panel_gap: float = 0.0
+    #: Slack between the panel block and the frame opening, per axis. The panels
+    #: are located by their bolts, not by the opening, so this is deliberate:
+    #: a snug wooden opening around a rigid PCB cracks the panel when the wood
+    #: moves with the seasons.
     clearance: float = 3.0
 
     # --- the panel block --------------------------------------------------
     @property
     def panels_width(self):
-        return self.panel.width * self.panels_x
+        return (self.panel.width * self.panels_x
+                + self.panel_gap * (self.panels_x - 1))
 
     @property
     def panels_height(self):
-        return self.panel.height * self.panels_y
+        return (self.panel.height * self.panels_y
+                + self.panel_gap * (self.panels_y - 1))
+
+    @property
+    def canvas_pixels(self):
+        """The pixel canvas the kernel renders to — 128 × 64 here."""
+        return (self.panel.pixels_x * self.panels_x,
+                self.panel.pixels_y * self.panels_y)
 
     # --- the frame --------------------------------------------------------
     @property
