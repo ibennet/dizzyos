@@ -206,6 +206,13 @@ else:
     check("sheet asks for one spacer stack per mounting hole",
           str(c.spacers_needed) in sheet,
           f"the sheet never mentions needing {c.spacers_needed} of them")
+    # The sheet promised "eight screws" to open the back against a 52 in
+    # perimeter. That number sets how hard the Pi is to reach, so state it once
+    # and derive it — an optimistic count here reads as a design that is easier
+    # to service than it is.
+    check(f"sheet quotes the back as {c.back_screws} screws",
+          str(c.back_screws) in sheet,
+          f"the sheet does not say the back takes {c.back_screws} screws")
 
 print()
 print(c.report())

@@ -333,6 +333,21 @@ class Case:
         # Nothing long enough: "a stock M2.5 screw clears the Pi stack" says so.
         return min(fits) if fits else max(STOCK_M25_SCREWS)
 
+    #: How far apart the back board's perimeter screws sit. Wider than this and
+    #: the thin plywood bows between them and daylight shows at the seam.
+    back_screw_spacing: float = 4 * MM_PER_INCH
+
+    @property
+    def back_screws(self):
+        """Screws holding the back board on — the count you undo for access.
+
+        Worth deriving rather than eyeballing: this is the number that decides
+        whether getting to the Pi is a two-minute job or a project, and the
+        build sheet claimed eight against a 52 in perimeter.
+        """
+        perimeter = 2 * (self.outer_width + self.outer_height)
+        return math.ceil(perimeter / self.back_screw_spacing)
+
     @property
     def spacers_needed(self):
         """Total spacer stacks, one per mounting hole across every panel."""
