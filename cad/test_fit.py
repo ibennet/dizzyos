@@ -263,10 +263,23 @@ else:
     check("sheet names the wall fixing",
           c.hanger[0] in sheet,
           f"the sheet never says to hang it on {c.hanger[0]}")
+    # The scroll animation maps each step to a model stage through a hardcoded
+    # array. Insert a step anywhere and every stage after it shifts by one, so
+    # the model quietly illustrates the wrong instruction — no error, just a
+    # drawing that no longer matches the words. Counting is the only defence.
+    steps = (sheet[sheet.index('<ol class="steps">'):]
+             if '<ol class="steps">' in sheet else "")
+    n_steps = len(re.findall(r"<li>", steps))
+    gbs = re.search(r"GROUP_BY_STEP = \[(.*?)\]", sheet, re.S)
+    n_stages = len(re.findall(r"\d+", re.sub(r"//[^\n]*", "", gbs.group(1)))) \
+        if gbs else 0
+    check("the animation has a stage for every step",
+          n_steps == n_stages,
+          f"{n_steps} steps but {n_stages} entries in GROUP_BY_STEP — "
+          f"the model illustrates the wrong step from the mismatch onward")
     # The guide used to say "screw a flat L-bracket across each inside corner",
     # which at 2 mm would foul panels that have 1.67 mm a side. Geometry alone
     # cannot catch prose, so check the prose.
-    steps = sheet[sheet.index('<ol class="steps">'):] if '<ol class="steps">' in sheet else ""
     # Match an instruction to fit one, not any mention — the sheet SHOULD warn
     # about braces, and a bare substring test flags its own warning.
     fitting = re.search(r"(screw|fit|attach|install|add)\b[^.]{0,40}"

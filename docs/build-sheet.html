@@ -249,6 +249,7 @@
   .box.pcb   { --edge: var(--amber); --fill: rgba(232,137,12,.26); }
   .box.glass { --edge: var(--teal);  --fill: rgba(60,160,175,.14); }
   .box.stand { --edge: var(--muted); --fill: rgba(128,128,128,.35); }
+  .box.steel { --edge: var(--muted); --fill: rgba(90,100,110,.55); }
 
   /* ---- steps ----
      Compact list; the active step is whichever one sits nearest the focus line
@@ -595,7 +596,7 @@
 
   <section>
     <h2>Assembly <span class="sheetno">Sheet 5 — build order</span></h2>
-    <p>Twenty-seven steps, written assuming you have never built anything. The model on the right
+    <p>Twenty-eight steps, written assuming you have never built anything. The model on the right
       shows where you are: the frame goes together first, the electronics get built up on the
       back board behind it, and that whole assembly seats into the case in one move near the end.</p>
 
@@ -666,7 +667,8 @@
       </div>
       <figcaption><b>Scroll the steps — the parts arrive as you reach them.</b> Every dimension is
         the real one from <code>cad/params.py</code>, so the model and the cut list cannot drift
-        apart. Wood is brown, LED panels blue, the Pi amber, the acrylic face teal.</figcaption>
+        apart. Wood is brown, LED panels blue, the Pi amber, the acrylic face teal, and the
+        keyhole hangers steel grey, arriving on the back at the very end.</figcaption>
       </figure>
      </div>
 
@@ -836,7 +838,11 @@
         thumbscrew stands about 10 mm off the back and would be much nicer to open, but there is
         1 mm to play with.</li>
 
-      <li><strong>Hang it.</strong> Fit <strong>two keyhole hangers</strong> to the back board, one
+      <li><strong>Fit the face.</strong> Peel the film off the acrylic and screw it to
+        the front of the frame — go gently,
+        acrylic cracks if you overtighten. Power up.</li>
+
+      <li><strong>Hang it, and you're done.</strong> Fit <strong>two keyhole hangers</strong> to the back board, one
         near each top corner, positioned so their screws land in the frame's top rail — ¾ in of
         pine to bite into, rather than ¼ in of plywood. The sign weighs about 2.3 kg; keyhole
         hangers are rated well past that, and the pair spreads the load across two fixings.
@@ -845,10 +851,6 @@
         one; into drywall anchors rated 10 kg or better if you cannot. Then hook it on and check
         it sits flat — if it rocks, something on the back is proud and wants countersinking
         further.</li>
-
-      <li><strong>Fit the face and you're done.</strong> Peel the film off the acrylic and screw it to
-        the front of the frame — go gently,
-        acrylic cracks if you overtighten. Power up.</li>
     </ol>
     </div>
 
@@ -943,7 +945,12 @@
         { cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: PANEL / 2, y: 0, z: zFront - PANEL_D / 2, g: 7, gi: 9, sz: STAGED },
         { cls: "pcb", w: 85, h: 56, d: 36, x: 40, y: 60, z: zBack + 18, g: 8, gi: 9, sz: STAGED },
         // 10 — the face
-        { cls: "glass", w: W, h: H, d: ACRYLIC, x: 0, y: 0, z: zFront + ACRYLIC / 2, g: 10, sz: 210 }
+        { cls: "glass", w: W, h: H, d: ACRYLIC, x: 0, y: 0, z: zFront + ACRYLIC / 2, g: 10, sz: 210 },
+        // 11 — the keyhole hangers, on the outside of the back board
+        { cls: "steel", w: 38, h: 16, d: 1.6, x: -130, y: (H - T) / 2 - 26,
+          z: zBack - BACK - 0.8, g: 11, sz: -120 },
+        { cls: "steel", w: 38, h: 16, d: 1.6, x: 130, y: (H - T) / 2 - 26,
+          z: zBack - BACK - 0.8, g: 11, sz: -120 }
       ];
 
       var FACES = ["front", "back", "right", "left", "top", "bottom"];
@@ -1004,7 +1011,7 @@
       if (svg) { document.getElementById("fallback2d").hidden = true; }
       fit();
       window.addEventListener("resize", fit);
-      place(reduced ? 10 : 0);
+      place(reduced ? 11 : 0);
       if (reduced) { document.querySelector(".steps").classList.add("static"); }
 
       // Drag to orbit.
@@ -1061,14 +1068,17 @@
       // Which model stage each step leaves you at. Several steps share a stage
       // — sanding and painting change nothing you can see in a wireframe — and
       // that is fine; the model holds while the instructions carry on.
+      // One entry per step, in order — `test_fit.py` asserts the lengths match,
+      // because adding a step silently shifts every stage after it and the
+      // model then illustrates the wrong instruction.
       var GROUP_BY_STEP = [
         0, 0, 0, 0, 0, 0, 0,  // 1-7   cut, lay out, dry fit, sand, mark, pilots
-        1, 2, 3, 3, 3,        // 8-12  frame goes together, braces, square
+        1, 2, 3, 3, 3,        // 8-12  frame goes together, keep it bare, square
         3, 3,                 // 13-14 paint, solder the HAT
-        4, 5, 6, 7, 8,        // 15-19 back board, standoffs, panels, Pi
+        4, 5, 6, 7, 8,        // 15-19 back board, spacers, panels, Pi
         8, 8, 8, 8, 8,        // 20-24 ribbons, power, bench test, holes, acrylic
         8,                    // 25    frost the face (or don't)
-        9, 10                 // 26-27 seat the assembly, fit the face
+        9, 10, 11             // 26-28 seat the assembly, fit the face, hang it
       ];
       var list = steps[0].parentNode;
       var current = -1;
