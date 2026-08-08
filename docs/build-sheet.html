@@ -200,7 +200,11 @@
   /* Two columns only once there is genuinely room for a readable measure
      alongside the model — below that, stacked reads better than cramped. */
   @media (min-width: 68rem) {
-    .scrolly { grid-template-columns: minmax(28rem, 1.35fr) minmax(0, 1fr); gap: 2.5rem; }
+    /* The figure gets the larger share now. Its labels hold a fixed screen size
+       while the model scales, so a narrow column spends most of its width on
+       label text and leaves the case tiny — at the old 1.35fr for the steps the
+       case rendered about 164px across. */
+    .scrolly { grid-template-columns: minmax(24rem, 1fr) minmax(0, 1.15fr); gap: 2.5rem; }
     .scrolly-fig { grid-column: 2; grid-row: 1; top: 1.5rem; }
     .scrolly .steps { grid-column: 1; grid-row: 1; }
   }
@@ -682,8 +686,8 @@
         <div class="scene" id="scene"></div>
       </div>
       <div class="figbar" id="figbar3d" hidden>
-        <span class="hint">Drag or arrow keys to rotate · pinch to zoom · shift-scroll to
-          spin · scroll the page to assemble</span>
+        <span class="hint">Two-finger drag or arrows to rotate · pinch to zoom · 0 resets
+          · scroll over the steps to assemble</span>
         <button type="button" class="btn" id="reset3d">Reset view</button>
       </div>
       <div class="figscroll" id="fallback2d">
@@ -1170,7 +1174,7 @@
       // One label per thing worth naming, anchored just outside the case so it
       // does not sit on top of the geometry. y is up, as everywhere in this
       // table. Each appears with the stage that introduces its part.
-      var LX = W / 2 + 62, LY = H / 2 + 34;
+      var LX = W / 2 + 145, LY = H / 2 + 92;
       // `to` is where the leader ends: the near edge of the part being named,
       // so the line points at the thing rather than vaguely into the case.
       var LABELS = [
@@ -1306,11 +1310,27 @@
         stage.style.setProperty("--sc", (fitScale * zoom).toFixed(3));
       }
 
+      // The labels counter-scale, so their screen size is fixed while the model
+      // shrinks — which means the space they need cannot be expressed as a
+      // padding factor on the model. Measure them and solve for the scale that
+      // leaves room: sc * LX + halfLabel <= halfStage. TILT covers a label
+      // swinging outward as the scene rotates about its own depth.
+      var TILT = 1.06;
+      function labelBox() {
+        var w = 0, hh = 0;
+        labelEls.forEach(function (el) {
+          w = Math.max(w, el.offsetWidth);
+          hh = Math.max(hh, el.offsetHeight);
+        });
+        return { w: w, h: hh };
+      }
       function fit() {
-        var padW = 1.95, padH = 1.75;
-        fitScale = Math.min(1,
-                            stage.clientWidth / (W * padW),
-                            stage.clientHeight / (H * padH));
+        var lb = labelBox();
+        var availX = stage.clientWidth / 2 - lb.w / 2 - 6;
+        var availY = stage.clientHeight / 2 - lb.h / 2 - 6;
+        fitScale = Math.max(0.08, Math.min(1,
+                                           availX / (LX * TILT),
+                                           availY / (LY * TILT)));
         applyScale();
       }
 
@@ -1327,50 +1347,81 @@
       place(reduced ? 16 : 0);
       if (reduced) { document.querySelector(".steps").classList.add("static"); }
 
-      // Drag to orbit.
-      var rx = -18, ry = -32, dragging = false, lastX = 0, lastY = 0;
+      // Drag to orbit; two fingers pinch and orbit at once.
+      var rx = -18, ry = -32;
       function apply() {
         scene.style.setProperty("--rx", rx + "deg");
         scene.style.setProperty("--ry", ry + "deg");
       }
       apply();
+
+      // Pointer bookkeeping rather than a single lastX/lastY, so a second
+      // finger is a gesture instead of a jump: orbit follows the centroid and
+      // zoom follows the spread between the two. This is the touch path — a
+      // trackpad's two-finger drag arrives as wheel events, handled below.
+      var pts = new Map();
+      function centroid() {
+        var sx = 0, sy = 0;
+        pts.forEach(function (q) { sx += q.x; sy += q.y; });
+        return { x: sx / pts.size, y: sy / pts.size };
+      }
+      function spread() {
+        var a = [];
+        pts.forEach(function (q) { a.push(q); });
+        return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      }
+      var lastC = null, lastS = 0;
+
+      function orbitBy(dx, dy) {
+        ry += dx * 0.45;
+        rx -= dy * 0.45;
+        rx = Math.max(-85, Math.min(85, rx));
+        apply();
+      }
+
       stage.addEventListener("pointerdown", function (e) {
-        dragging = true; lastX = e.clientX; lastY = e.clientY;
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        lastC = centroid();
+        lastS = spread();
         scene.style.transition = "none";
         stage.setPointerCapture(e.pointerId);
       });
       stage.addEventListener("pointermove", function (e) {
-        if (!dragging) { return; }
-        ry += (e.clientX - lastX) * 0.45;
-        rx -= (e.clientY - lastY) * 0.45;
-        rx = Math.max(-85, Math.min(85, rx));
-        lastX = e.clientX; lastY = e.clientY;
-        apply();
+        if (!pts.has(e.pointerId)) { return; }
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        var c = centroid(), s = spread();
+        if (lastC) { orbitBy(c.x - lastC.x, c.y - lastC.y); }
+        if (pts.size > 1 && lastS > 8 && s > 8) { setZoom(zoom * (s / lastS)); }
+        lastC = c;
+        lastS = s;
       });
       ["pointerup", "pointercancel"].forEach(function (ev) {
-        stage.addEventListener(ev, function () {
-          dragging = false; scene.style.transition = "";
+        stage.addEventListener(ev, function (e) {
+          pts.delete(e.pointerId);
+          // Re-seat the reference from the fingers still down, or lifting one of
+          // two would read as a large jump of the centroid.
+          lastC = pts.size ? centroid() : null;
+          lastS = spread();
+          if (!pts.size) { scene.style.transition = ""; }
         });
       });
+
+      // Trackpad. Two-finger drag orbits on both axes and pinch zooms, which
+      // means this figure keeps the scroll gesture instead of passing it on:
+      // with the pointer over the model the page will not scroll, so advancing
+      // the build is done with the pointer over the steps.
+      stage.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        if (e.ctrlKey) {                      // browsers deliver pinch this way
+          setZoom(zoom * Math.pow(1.0075, -e.deltaY));
+        } else {
+          orbitBy(e.deltaX * 0.32, e.deltaY * 0.32);
+        }
+      }, { passive: false });
+
       document.getElementById("reset3d").addEventListener("click", function () {
         rx = -18; ry = -32; setZoom(1); apply();
       });
-
-      // Trackpad. The page's own scroll is what drives the build, so a plain
-      // two-finger scroll must keep scrolling — hijacking it would break the
-      // thing this figure exists for. Only the gestures that carry a modifier
-      // are claimed: pinch (which browsers deliver as ctrl+wheel) zooms, and
-      // shift+scroll orbits. Both call preventDefault; nothing else does.
-      stage.addEventListener("wheel", function (e) {
-        if (e.ctrlKey) {
-          e.preventDefault();
-          setZoom(zoom * Math.pow(1.0022, -e.deltaY));
-        } else if (e.shiftKey) {
-          e.preventDefault();
-          ry += e.deltaX * 0.35 + e.deltaY * 0.35;
-          apply();
-        }
-      }, { passive: false });
 
       // Keyboard, so the model is not drag-only: arrows orbit, +/- zoom, 0
       // resets. The stage takes focus for this, and shows a ring when it has it.
