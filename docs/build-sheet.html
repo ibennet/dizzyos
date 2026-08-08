@@ -235,6 +235,15 @@
      faces you, and counter-scale by --fit so it stays legible when the model is
      shrunk to fit. Reading --rx/--ry/--fit works because they are custom
      properties set on the stage and scene, so they inherit down here. */
+  .lblpos {
+    position: absolute;
+    left: 0; top: 0;
+    transform-style: preserve-3d;
+    transform: translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0));
+    transition: transform .6s cubic-bezier(.22,.68,.28,1);
+  }
+  @media (prefers-reduced-motion: reduce) { .lblpos { transition: none; } }
+
   .lbl3d {
     position: absolute;
     left: 0; top: 0;
@@ -253,7 +262,6 @@
     opacity: 0;
     transition: opacity .35s ease;
     transform:
-      translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0))
       rotateY(calc(-1 * var(--ry, 0deg)))
       rotateX(calc(-1 * var(--rx, 0deg)))
       scale(calc(1 / var(--sc, 1)))
@@ -274,6 +282,8 @@
     transform:
       translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0))
       translate(-50%, -50%);
+    transition: opacity .35s ease,
+                transform .6s cubic-bezier(.22,.68,.28,1);
   }
   .lead3d.in { opacity: .8; }
 
@@ -293,6 +303,8 @@
     transform:
       translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0))
       translate(-50%, -50%);
+    transition: opacity .35s ease,
+                transform .6s cubic-bezier(.22,.68,.28,1);
   }
   .dot3d.in { opacity: 1; }
   @media (prefers-reduced-motion: reduce) { .dot3d { transition: none; } }
@@ -1251,15 +1263,16 @@
         return el;
       });
 
+      // The wrapper is what moves; the inner element is what faces the reader.
       var labelEls = LABELS.map(function (L) {
+        var pos = document.createElement("div");
+        pos.className = "lblpos";
         var el = document.createElement("div");
         el.className = "lbl3d";
         el.textContent = L.t;
-        el.style.setProperty("--lx", L.x + "px");
-        el.style.setProperty("--ly", (-L.y) + "px");
-        el.style.setProperty("--lz", L.z + "px");
-        scene.appendChild(el);
-        return el;
+        pos.appendChild(el);
+        scene.appendChild(pos);
+        return { pos: pos, txt: el };
       });
 
       var FACES = ["front", "back", "right", "left", "top", "bottom"];
@@ -1324,20 +1337,65 @@
         });
         if (!hit) {
           console.error("[build-sheet] label '" + L.t +
-                        "' does not point at its " + L.for);
+                        "' does not point at its " + L.for +
+                        " — it will also fail to follow that part, since the" +
+                        " part it copies is the one it lands on");
         }
       });
+
+      // Where a part is displaced from its final position at a given stage:
+      // nothing once seated, the mid pose if one is declared and reached, else
+      // wherever it waits. Factored out because the labels need the same answer
+      // — a label that ignores this points at where its part will end up, which
+      // is empty space while the part is still parked behind the case.
+      function offsetOf(p, stage) {
+        if (stage >= (p.gi || p.g)) { return [0, 0, 0]; }
+        if (p.mid && stage >= p.mid[0]) {
+          return [p.mid[1], p.mid[2], p.mid[3]];
+        }
+        return [p.sx || 0, p.sy || 0, p.sz || 0];
+      }
+
+      // The part each dot rests on — the same containment test the assertion
+      // below uses. Its displacement is what the label, leader and dot copy, so
+      // an annotation travels with the thing it names instead of waiting at the
+      // place that thing will eventually occupy.
+      var anchorOf = LABELS.map(function (L, i) {
+        var side = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        var tx = side ? L.to : L.x, ty = side ? L.y : L.to;
+        var found = -1;
+        litFor[i].forEach(function (bi) {
+          if (found >= 0) { return; }
+          var p = PARTS[bi];
+          if (Math.abs(tx - p.x) <= p.w / 2 + 1.5
+              && Math.abs(ty - p.y) <= p.h / 2 + 1.5
+              && Math.abs(L.z - p.z) <= p.d / 2 + 1.5) { found = bi; }
+        });
+        return found;
+      });
+
+      // Base positions, in the same CSS space the elements use.
+      var annoBase = LABELS.map(function (L) {
+        var side = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        var from = side ? L.x - Math.sign(L.x) * GAP : L.y - Math.sign(L.y) * GAP;
+        return {
+          lbl: { x: L.x, y: -L.y },
+          lead: side ? { x: (from + L.to) / 2, y: -L.y }
+                     : { x: L.x, y: -(from + L.to) / 2 },
+          dot: side ? { x: L.to, y: -L.y } : { x: L.x, y: -L.to }
+        };
+      });
+
+      function moveAnno(el, base, off) {
+        el.style.setProperty("--lx", (base.x + off[0]) + "px");
+        el.style.setProperty("--ly", (base.y - off[1]) + "px");
+        el.style.setProperty("--lz", off[2] + "px");
+      }
 
       function place(stage) {
         PARTS.forEach(function (p, i) {
           var visible = stage >= p.g;
-          var seated = stage >= (p.gi || p.g);
-          // Offset from the final position: none once seated, the mid pose if
-          // one is declared and reached, otherwise where the part waits.
-          var off = seated ? [0, 0, 0] : [p.sx || 0, p.sy || 0, p.sz || 0];
-          if (!seated && p.mid && stage >= p.mid[0]) {
-            off = [p.mid[1], p.mid[2], p.mid[3]];
-          }
+          var off = offsetOf(p, stage);
           var x = p.x + off[0];
           var y = p.y + off[1];
           var z = p.z + off[2];
@@ -1359,9 +1417,14 @@
         boxes.forEach(function (b, i) { b.classList.toggle("lit", !!lit[i]); });
         LABELS.forEach(function (L, i) {
           var on = stage >= L.g;
-          labelEls[i].classList.toggle("in", on);
+          labelEls[i].txt.classList.toggle("in", on);
           leadEls[i].classList.toggle("in", on);
           dotEls[i].classList.toggle("in", on);
+          var anchor = anchorOf[i];
+          var off = anchor >= 0 ? offsetOf(PARTS[anchor], stage) : [0, 0, 0];
+          moveAnno(labelEls[i].pos, annoBase[i].lbl, off);
+          moveAnno(leadEls[i], annoBase[i].lead, off);
+          moveAnno(dotEls[i], annoBase[i].dot, off);
         });
       }
 
@@ -1385,9 +1448,9 @@
       var TILT = 1.06;
       function labelBox() {
         var w = 0, hh = 0;
-        labelEls.forEach(function (el) {
-          w = Math.max(w, el.offsetWidth);
-          hh = Math.max(hh, el.offsetHeight);
+        labelEls.forEach(function (e) {
+          w = Math.max(w, e.txt.offsetWidth);
+          hh = Math.max(hh, e.txt.offsetHeight);
         });
         return { w: w, h: hh };
       }

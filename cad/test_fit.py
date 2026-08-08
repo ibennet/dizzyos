@@ -360,6 +360,16 @@ else:
     check("every label names a part that exists",
           named and named <= ids,
           f"label target(s) {sorted(named - ids)} match no part in the drawing")
+    # Most parts spend several stages parked away from where they end up — the
+    # acrylic waits 210 mm forward, the back assembly 195 mm behind. A label
+    # positioned once, at the part's final place, points at empty space for all
+    # of those stages. There is no visual error to notice, so guard the
+    # mechanism: the annotations must be displaced by the same offsetOf() the
+    # parts use, every stage.
+    check("labels follow their part while it is staged",
+          "moveAnno(" in sheet and "offsetOf(PARTS[anchor]" in sheet,
+          "annotations are positioned without consulting offsetOf, so they "
+          "will sit at each part's final position from the moment it appears")
     # The label's own depth must be the part's depth, or the leader floats in
     # front of or behind the thing it points at. Both were wrong — the acrylic
     # label sat 19 mm proud of the acrylic — because each was written twice.
