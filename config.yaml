@@ -9,7 +9,14 @@ matrix:
   brightness: 70
   # --- Pi-only (ignored by the Mac emulator) ---
   hardware_mapping: adafruit-hat-pwm   # use "adafruit-hat" if you didn't solder the PWM jumper
-  gpio_slowdown: 4                     # 4 is a safe default on a Pi 4
+  gpio_slowdown: 4                     # 4 suits a Pi 4; a Pi 3B+ wants 1-2
+  # --- flicker tuning (all optional; omit to keep the driver's defaults) ---
+  # Without the hardware-PWM jumper the driver pulses in software, so refresh
+  # rate is the lever against visible flicker. Lowering pwm_bits or
+  # pwm_lsb_nanoseconds buys refresh rate at the cost of color depth.
+  # pwm_bits: 11                       # try 8 if the panel flickers
+  # pwm_lsb_nanoseconds: 130           # try 100
+  # limit_refresh_rate_hz: 0           # pin a rate for steadiness (0 = unlimited)
   # pixel_mapper_config: "Rotate:90"   # uncomment to stack the panels as a tall 64x128
 
 launcher:
