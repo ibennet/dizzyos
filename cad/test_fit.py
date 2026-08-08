@@ -37,6 +37,28 @@ def check(name, condition, detail=""):
 
 c = CASE
 
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def config_canvas():
+    """Canvas size straight from config.yaml (tiny hand-parse, no yaml dep) so
+    this tracks the shipped config instead of a hardcoded pair."""
+    vals, in_matrix = {}, False
+    with open(os.path.join(ROOT, "config.yaml"), encoding="utf-8") as fh:
+        for line in fh:
+            if re.match(r"^matrix:", line):
+                in_matrix = True
+                continue
+            if in_matrix:
+                if re.match(r"^\S", line):        # dedent -> out of the matrix block
+                    break
+                m = re.match(r"\s+(rows|cols|chain|parallel):\s*(\d+)", line)
+                if m:
+                    vals[m.group(1)] = int(m.group(2))
+    return (vals.get("cols", 0) * vals.get("chain", 1),
+            vals.get("rows", 0) * vals.get("parallel", 1))
+
+
 print("the seam between panels")
 # The one dimension with no tolerance at all. Pixels sit half a pitch in from
 # each panel edge, so butted panels continue the grid across the seam at exactly
@@ -49,8 +71,8 @@ check("the seam keeps the pixel pitch",
       f"effective pitch {c.panels_width / c.canvas_pixels[0]:.4f} mm "
       f"vs panel pitch {c.panel.pitch} mm")
 check("canvas matches what the kernel renders",
-      c.canvas_pixels == (128, 64),
-      f"canvas {c.canvas_pixels} — config.yaml expects 128x64")
+      c.canvas_pixels == config_canvas(),
+      f"canvas {c.canvas_pixels} — config.yaml resolves to {config_canvas()}")
 
 print("panel block in the opening")
 check("panels fit the opening width",
@@ -106,6 +128,20 @@ check("Pi stack clears the panels",
 check("cable headroom behind the stack",
       c.stack_headroom >= 8,
       f"only {c.stack_headroom:.1f} mm — ribbons need room to turn")
+# Regression guard: the cavity is the STOCK standoff the panels sit on, not the
+# ideal one. Using standoff_ideal over-reported headroom by ~4 mm and hid how
+# tight this is (the bug the build sheet's 3D model had already caught).
+check("cavity uses the stock standoff, not the ideal length",
+      abs(c.cavity_behind_panels - c.standoff_length) < 1e-9,
+      f"cavity {c.cavity_behind_panels:.1f} != standoff {c.standoff_length:.1f}")
+# The panel's own back connectors eat into that headroom. A slightly negative
+# clearance is survivable (route the ribbon out sideways), but an overrun larger
+# than a ribbon bend radius is a real collision no routing fixes.
+RIBBON_BEND_RADIUS = 6.0
+check("ribbon can turn beside the stack (not a hard collision)",
+      c.stack_clearance > -RIBBON_BEND_RADIUS,
+      f"clearance {c.stack_clearance:.1f} mm after {c.panel.connector_depth:.1f} mm "
+      f"connectors — deeper frame or thinner stack needed")
 
 print("getting the back assembly in and out")
 # Everything mounts to the back board, so it comes out backwards — dragging the
@@ -256,10 +292,17 @@ else:
     # perimeter. That number sets how hard the Pi is to reach, so state it once
     # and derive it — an optimistic count here reads as a design that is easier
     # to service than it is.
-    check(f"sheet says {c.opening_fasteners} screws open the back",
-          str(c.opening_fasteners) in sheet,
-          f"the sheet does not say the back opens with "
-          f"{c.opening_fasteners} screws")
+    # Not a bare `str(n) in sheet` — a single "4" matches hundreds of things on
+    # the page (that was the vacuous check this replaces). Tie the count to the
+    # "corner screws" it actually describes, as a digit or the number word.
+    words = {1: "one", 2: "two", 3: "three", 4: "four",
+             5: "five", 6: "six", 7: "seven", 8: "eight"}
+    n = c.opening_fasteners
+    word = words.get(n, str(n))
+    check(f"sheet ties opening the back to {n} corner screws",
+          re.search(rf"\b({n}|{word})\b[^.<]{{0,40}}corner screws", sheet, re.I)
+          is not None,
+          f"the sheet does not tie opening the back to {n} corner screws")
     check("sheet names the wall fixing",
           c.hanger[0] in sheet,
           f"the sheet never says to hang it on {c.hanger[0]}")

@@ -75,6 +75,13 @@ class Panel:
     #: the back board and the whole spacer stack before it engages anything,
     #: and why it can bottom out: the thread is only so deep. Measure yours.
     mount_thread_depth: float = 6.0
+    #: How far the back-panel connectors (the shrouded HUB75 IDC header and the
+    #: power header) stand PROUD of the PCB back. Deliberately excluded from
+    #: `depth` above, but they protrude into the cavity toward the Pi stack, so
+    #: the free depth for the stack and the ribbon is this much less than the raw
+    #: standoff gap. Measure yours — it is the number that decides if the ribbon
+    #: has room to turn.
+    connector_depth: float = 8.5
 
     @property
     def width(self):
@@ -140,10 +147,17 @@ DENSITY_ACRYLIC = 1180.0
 MAX_BACK_PROTRUSION = 1.0
 
 #: What actually sits on the back face, and how far each stands off it in mm.
-#: All of it has to come in under `MAX_BACK_PROTRUSION`.
+#: All of it has to come in under `MAX_BACK_PROTRUSION`. The panel- and Pi-
+#: mounting screw heads push through from behind too, so they are here as well:
+#: they only come in under budget because the build sheet counterbores them
+#: flush — a pan head left proud is ~2 mm, and this list is what would catch a
+#: regression to one. (The power cord is NOT here: it exits the bottom rail, not
+#: the back face — see the build sheet.)
 BACK_FACE_HARDWARE = (
     ('countersunk #6 screw head', 0.0),
     ('recessed magnetic catch', 0.0),
+    ('countersunk M3 panel-mount head', 0.0),
+    ('countersunk M2.5 Pi-mount head', 0.0),
     ('keyhole hanger plate', 0.8),
 )
 
@@ -495,13 +509,35 @@ class Case:
 
     @property
     def cavity_behind_panels(self):
-        """Depth available for the Pi/HAT stack."""
-        return self.interior_depth - self.panel.depth
+        """Depth available for the Pi/HAT stack: back board to the back of a panel.
+
+        This is the *stock* standoff the panels actually sit on, NOT
+        `standoff_ideal` — rounding the standoff DOWN (see `standoff_length`)
+        shortens this gap by `panel_recess`, and the stack lives in the real gap,
+        not the ideal one. Using standoff_ideal here was a bug that over-reported
+        the headroom by ~4 mm; the build sheet's own 3D model had it right
+        (STANDOFF = 44.45, not interior − panel).
+        """
+        return self.standoff_length
 
     @property
     def stack_headroom(self):
-        """Slack left over once the Pi stack is in — cable room."""
+        """Slack left over once the Pi stack is in — raw cable room, before the
+        panel's own back connectors are accounted for (see `stack_clearance`)."""
         return self.cavity_behind_panels - self.electronics.stack_depth
+
+    @property
+    def stack_clearance(self):
+        """The genuinely free depth between the top of the Pi stack and the
+        panel's back connectors — what the ribbon has to turn in.
+
+        Can be small or negative: this model is Z-only, so a tight/negative
+        number doesn't necessarily mean a collision (the ~85×56 mm stack can be
+        positioned in XY clear of the connectors), it means the ribbon must exit
+        sideways rather than straight back, and it must be verified on real
+        hardware. If it can't be routed clear, the frame has to get deeper.
+        """
+        return self.stack_headroom - self.panel.connector_depth
 
     # --- reporting --------------------------------------------------------
     def cut_list(self):
@@ -542,9 +578,13 @@ class Case:
             f" {self.panel.mount_thread_depth:.0f} mm inlet)",
             f"  Pi screws           M2.5 × {self.pi_screw_length:.0f} mm"
             f"  + nut, over a {fraction(self.electronics.pi_standoff)} spacer",
-            f"  cavity behind       {self.cavity_behind_panels:.1f} mm",
+            f"  cavity behind       {self.cavity_behind_panels:.1f} mm"
+            f"  (the stock standoff, not the ideal {self.standoff_ideal:.1f})",
             f"  Pi + riser + HAT    {self.electronics.stack_depth:.1f} mm",
             f"  headroom for cable  {self.stack_headroom:.1f} mm",
+            f"  ribbon clearance    {self.stack_clearance:.1f} mm"
+            f"  (after {self.panel.connector_depth:.1f} mm panel connectors — TIGHT;"
+            f" route the ribbon sideways, verify on hardware)",
             f"  1×3 needed          {fraction(self.board_length_needed)}"
             f" of {fraction(self.stock.board_length)}",
             "",

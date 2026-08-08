@@ -5,7 +5,7 @@ services (display, data, fonts, input) and self-contained **apps** plug in — e
 its own lifecycle. A **launcher** rotates through them with smooth transitions.
 
 Runs on two chained Adafruit 64×64 HUB75 panels (a 128×64 canvas) driven by a
-Raspberry Pi + Adafruit RGB Matrix Bonnet — and, thanks to a drop-in emulator, on your
+Raspberry Pi + Adafruit RGB Matrix HAT — and, thanks to a drop-in emulator, on your
 Mac with **zero code changes**.
 
 Apps so far: **Cafe Menu**, which renders [Izzy's Cafe](https://izzybennett.com/izzys-cafe/)
@@ -69,7 +69,7 @@ kernel/
   data.py         cached, stale-on-error fetching — JSON or bytes (http + file)
   render.py       font loading + text/scroll helpers
   services.py     the handle passed to each app
-  input.py        (optional) Bonnet GPIO buttons -> next/prev app
+  input.py        (optional) HAT GPIO buttons -> next/prev app
 apps/
   cafe_menu/      the site menu, scrolling
   weather/        current conditions + high/low, procedural weather icons
@@ -161,9 +161,11 @@ journalctl -u dizzyos-update
 
 ### Hardware notes
 
-- **Power:** two 64×64 panels can pull ~3–4A **each** at full white. Use a **5V 8–10A**
-  supply and feed the panels directly, not through the Pi.
-- **Solder the Bonnet's address-E jumper** (required for 1:32-scan 64-row panels).
+- **Power:** two 64×64 panels can pull ~3–4A **each** at full white (~8A peak). Run
+  **two 5V supplies**: one to the Pi, and a separate **5V 8–10A** supply to the HAT's
+  screw terminal, which feeds the panels — don't run the panels off the Pi's supply.
+  Fuse the panel supply and keep the grounds common. (Full wiring: the build sheet.)
+- **Solder the HAT's address-E jumper** (required for 1:32-scan 64-row panels).
 - **Solder the hardware-PWM jumper** (GPIO4↔GPIO18) to kill flicker, then use
   `--led-gpio-mapping=adafruit-hat-pwm`.
 - **Stack vs. side-by-side:** the panels chain into 128×64. To mount them as a tall
