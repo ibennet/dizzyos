@@ -1,0 +1,21 @@
+#!/bin/bash
+# dizzyos: write /etc/dizzyos/config.yaml atomically, as root, from stdin.
+#
+# Invoked via sudo by the settings server, which runs as `daemon` after the
+# matrix library drops privileges and so can't write /etc/dizzyos itself. The
+# target path is FIXED — this helper can only ever write the config, never an
+# arbitrary path — so the only power the sudoers rule grants `daemon` is exactly
+# the power the (PIN-gated) settings UI already has. The server validates the
+# YAML before calling us; we just make the write crash-safe.
+set -eu
+
+DEST=/etc/dizzyos/config.yaml
+DIR=$(dirname "$DEST")
+TMP=$(mktemp "$DIR/.config-XXXXXX")
+trap 'rm -f "$TMP"' EXIT
+
+cat > "$TMP"
+[ -f "$DEST" ] && cp -p "$DEST" "$DEST.prev"
+chmod 644 "$TMP"
+mv "$TMP" "$DEST"      # atomic on the same filesystem
+trap - EXIT

@@ -1,0 +1,36 @@
+# dizzyos LED matrix sign — the app itself.
+# Installed by tools/pi/bootstrap.sh. The code path runs through the
+# /opt/dizzyos/current symlink (flipped atomically by dizzyos-update);
+# user config lives in /etc/dizzyos so updates never touch it.
+# rpi-rgb-led-matrix needs root for stable GPIO timing, hence User=root.
+
+[Unit]
+Description=dizzyos LED matrix sign
+After=network-online.target
+Wants=network-online.target
+# Retry forever: the default start limit (5 starts / 10s) would give up and
+# leave the sign dark exactly in a transient crash loop (a flaky call at
+# startup). The updater's health check — not systemd — decides a release is bad.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/dizzyos/current
+ExecStart=/opt/dizzyos/venv/bin/python /opt/dizzyos/current/run.py --config /etc/dizzyos/config.yaml
+Restart=always
+RestartSec=5
+# The kernel touches this while rendering; dizzyos-update reads it as the
+# post-deploy health signal (no heartbeat -> automatic rollback). That signal
+# is the only thing standing between a bad release and a sign you'd collect by
+# hand, so the directory must NOT be world-writable (a forged heartbeat would
+# defeat the check). Group=daemon + 0770 lets the privilege-dropped render loop
+# (rpi-rgb-led-matrix drops to `daemon` once it has the GPIO) write it via the
+# group, without granting write to everyone.
+RuntimeDirectory=dizzyos
+RuntimeDirectoryMode=0770
+Group=daemon
+Environment=DIZZYOS_HEARTBEAT=/run/dizzyos/heartbeat
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+# One update check. Fired by dizzyos-update.timer; harmless to run by hand:
+#   sudo systemctl start dizzyos-update
+
+[Unit]
+Description=dizzyos self-update check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Run the updater from inside the current release, not a separate payload copy,
+# so a release that ships a broken updater is rolled back along with everything
+# else (bootstrap.sh does the very first --install from the payload copy).
+ExecStart=/opt/dizzyos/current/tools/pi/dizzyos-update
+# A deploy is download + pip install + font-cache warm + a 90s health wait, well
+# past the 90s default that would SIGTERM us mid-flip before rollback can run.
+TimeoutStartSec=30min
+# The nightly run competes with the render loop; keep it off the critical path.
+Nice=10
+IOSchedulingClass=idle

@@ -5,7 +5,7 @@ services (display, data, fonts, input) and self-contained **apps** plug in — e
 its own lifecycle. A **launcher** rotates through them with smooth transitions.
 
 Runs on two chained Adafruit 64×64 HUB75 panels (a 128×64 canvas) driven by a
-Raspberry Pi + Adafruit RGB Matrix Bonnet — and, thanks to a drop-in emulator, on your
+Raspberry Pi + Adafruit RGB Matrix HAT — and, thanks to a drop-in emulator, on your
 Mac with **zero code changes**.
 
 Apps so far: **Cafe Menu**, which renders [Izzy's Cafe](https://izzybennett.com/izzys-cafe/)
@@ -32,6 +32,13 @@ make frames APP=weather      # render frames to PNGs, headless -> frames/weather
 
 `make dev`/`make frames` are thin wrappers over `python run.py` (use it directly if
 you prefer: `python run.py --app weather`, `python run.py --dump-frames frames/`).
+
+Before pushing, run the green gate — byte-compiles everything and runs a hardware-free
+smoke test of the kernel and system layer. CI runs exactly this:
+
+```bash
+./dev/check.sh
+```
 
 The `--led-*` flags mirror `rpi-rgb-led-matrix`, e.g.
 `python run.py --led-rows=64 --led-cols=64 --led-chain=2`. Panel geometry defaults
@@ -62,7 +69,7 @@ kernel/
   data.py         cached, stale-on-error fetching — JSON or bytes (http + file)
   render.py       font loading + text/scroll helpers
   services.py     the handle passed to each app
-  input.py        (optional) Bonnet GPIO buttons -> next/prev app
+  input.py        (optional) HAT GPIO buttons -> next/prev app
 apps/
   cafe_menu/      the site menu, scrolling
   weather/        current conditions + high/low, procedural weather icons
@@ -93,31 +100,80 @@ showing the last good value if a fetch fails.
 
 ## Deploying to the Raspberry Pi
 
-1. Flash **Raspberry Pi OS Lite** (use a Pi 4 / 3B+ / Zero 2 W — solid GPIO timing).
-2. Install the real driver (builds hzeller/rpi-rgb-led-matrix + Python bindings):
-   ```bash
-   curl https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/main/rgb-matrix.sh -O
-   sudo bash rgb-matrix.sh
-   ```
-3. Clone this repo, then `pip install Pillow PyYAML` (the emulator is **not** needed
-   on the Pi — `kernel/display.py` uses the real `rgbmatrix` module automatically).
-4. Run the same command, adding hardware flags:
-   ```bash
-   python run.py --led-gpio-mapping=adafruit-hat-pwm --led-slowdown-gpio=4
-   ```
-5. Auto-start on boot: `sudo cp dizzyos.service /etc/systemd/system/ &&
-   sudo systemctl enable --now dizzyos`.
+Flash an SD card and the sign does the rest. No monitor, no keyboard, no SSH.
+
+```bash
+./tools/flash.sh                                        # interactive
+./tools/flash.sh --device disk6 --ssid Home --hostname lobby-sign
+```
+
+`flash.sh` downloads and SHA256-verifies the latest **Raspberry Pi OS Lite arm64**
+(cached in `~/Library/Caches`), writes it to the card, and injects the HUB75 hardware
+config, your WiFi credentials + SSH key, and the first-boot payload. It refuses
+internal disks and makes you retype the device and its size before erasing anything.
+
+Use a **Pi 4 / 3B+ / Zero 2 W** — they have solid GPIO timing.
+
+### First boot (~10 minutes, unattended)
+
+Provision (hostname, user, SSH key, WiFi profile) → reboot → compile the matrix driver
+into `/opt/dizzyos/venv` → install the latest release → start. Then the sign is up and
+rotating apps on its own. Watch progress by SSHing in if you like, or just wait for
+pixels.
+
+While the network is down the sign draws a small **red no-WiFi icon** in the top-left
+corner, over whatever app is on screen. That's the one thing to look for if a sign
+comes up blank-ish or stale.
+
+### Settings page
+
+Every sign serves a settings page on the LAN:
+
+```
+http://<hostname>.local:8080
+```
+
+Opening it makes the sign **display a one-time PIN for 30 seconds** — type what you see
+on the sign to unlock the session. That's the authorization model: you have to be in
+the room. From there you can join a different WiFi network and edit the device's
+`config.yaml` (validated on save; the sign restarts itself to apply).
+
+On-device config lives at **`/etc/dizzyos/config.yaml`** — outside the release tree, so
+it survives every update.
+
+### Self-updating
+
+A nightly timer (04:00, jittered) checks for the latest GitHub release, unpacks its
+source tarball to `/opt/dizzyos/releases/<tag>/`, and atomically flips the
+`/opt/dizzyos/current` symlink. The launcher touches a heartbeat file every frame, so
+the updater can tell whether the new release actually renders — if it doesn't, the
+symlink flips back, the tag is marked bad, and the sign keeps running what it had.
+Releases carry no build artifacts by design (see
+[ADR 0002](docs/adr/0002-flash-provision-update.md)).
+
+Run one by hand, or read the log:
+
+```bash
+sudo dizzyos-update            # update if there's a newer release
+sudo dizzyos-update --force    # re-deploy the current tag, or retry a bad one
+journalctl -u dizzyos-update
+```
 
 ### Hardware notes
 
-- **Power:** two 64×64 panels can pull ~3–4A **each** at full white. Use a **5V 8–10A**
-  supply and feed the panels directly, not through the Pi.
-- **Solder the Bonnet's address-E jumper** (required for 1:32-scan 64-row panels).
+- **Power:** two 64×64 panels can pull ~3–4A **each** at full white (~8A peak). Run
+  **two 5V supplies**: one to the Pi, and a separate **5V 8–10A** supply to the HAT's
+  screw terminal, which feeds the panels — don't run the panels off the Pi's supply.
+  Fuse the panel supply and keep the grounds common. (Full wiring: the build sheet.)
+- **Solder the HAT's address-E jumper** (required for 1:32-scan 64-row panels).
 - **Solder the hardware-PWM jumper** (GPIO4↔GPIO18) to kill flicker, then use
   `--led-gpio-mapping=adafruit-hat-pwm`.
 - **Stack vs. side-by-side:** the panels chain into 128×64. To mount them as a tall
   64×128 instead, set `pixel_mapper_config: "Rotate:90"` in `config.yaml` — no code
   change.
+- **Enclosure + full build:** [`docs/build-sheet.html`](docs/build-sheet.html) is the
+  step-by-step wood/acrylic build (cut list, wiring, assembly); the parametric model
+  and its fit checks live in [`cad/`](cad/) (`python cad/test_fit.py`).
 
 ## Credits
 

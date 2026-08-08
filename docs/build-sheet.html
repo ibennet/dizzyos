@@ -1,0 +1,1753 @@
+<title>dizzyos sign — case build &amp; shopping list</title>
+<style>
+  :root {
+    --ground: #F2F4F3;
+    --surface: #FFFFFF;
+    --sunk:   #E7EBEA;
+    --ink:    #16191C;
+    --muted:  #5C6670;
+    --rule:   #D3D9D8;
+    --rule-strong: #AEB7B6;
+    --amber:  #B96A05;
+    --amber-soft: rgba(232,137,12,.13);
+    --teal:   #0E7C86;
+    --shadow: 0 1px 2px rgba(20,28,32,.07), 0 6px 18px rgba(20,28,32,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #12161A;
+      --surface: #1A1F25;
+      --sunk:   #151A1F;
+      --ink:    #E8EDF0;
+      --muted:  #93A0AB;
+      --rule:   #2A323A;
+      --rule-strong: #3D4954;
+      --amber:  #F5A63B;
+      --amber-soft: rgba(245,166,59,.12);
+      --teal:   #35B7C2;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #12161A;
+    --surface: #1A1F25;
+    --sunk:   #151A1F;
+    --ink:    #E8EDF0;
+    --muted:  #93A0AB;
+    --rule:   #2A323A;
+    --rule-strong: #3D4954;
+    --amber:  #F5A63B;
+    --amber-soft: rgba(245,166,59,.12);
+    --teal:   #35B7C2;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 6px 18px rgba(0,0,0,.3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 2rem) 5rem;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Wider than a pure reading measure because the assembly section runs two
+     columns; body prose keeps its own max-width so it never sprawls. */
+  .sheet { max-width: 64rem; margin: 0 auto; display: flex; flex-direction: column; gap: 2.75rem; }
+
+  /* ---- title block ---- */
+  .titleblock {
+    border: 1.5px solid var(--rule-strong);
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .titleblock h1 {
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed;
+    font-size: clamp(1.6rem, 5vw, 2.4rem);
+    line-height: 1.1;
+    letter-spacing: .01em;
+    margin: 0;
+    padding: 1.1rem 1.25rem .85rem;
+    text-wrap: balance;
+  }
+  .titleblock .meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    border-top: 1px solid var(--rule);
+  }
+  .titleblock .cell { padding: .6rem 1.25rem .7rem; border-right: 1px solid var(--rule); }
+  .titleblock .cell:last-child { border-right: 0; }
+  .lbl {
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    letter-spacing: .13em;
+    font-size: .68rem;
+    color: var(--muted);
+    display: block;
+  }
+  .val { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+         font-size: .9rem; font-variant-numeric: tabular-nums; }
+
+  /* ---- sections ---- */
+  section { display: flex; flex-direction: column; gap: 1rem; }
+  h2 {
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    font-size: 1.05rem;
+    margin: 0;
+    padding-bottom: .5rem;
+    border-bottom: 1.5px solid var(--ink);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  h2 .sheetno { color: var(--muted); font-size: .72rem; letter-spacing: .13em; }
+  h3 {
+    font-size: .95rem;
+    margin: .5rem 0 0;
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--muted);
+  }
+  p { margin: 0; max-width: 62ch; }
+  a { color: var(--amber); }
+
+  /* ---- figures ---- */
+  figure { margin: 0; background: var(--surface); border: 1px solid var(--rule);
+           padding: 1rem; display: flex; flex-direction: column; gap: .75rem; }
+  .figscroll { overflow-x: auto; }
+  figure svg { display: block; max-width: 100%; height: auto; color: var(--ink); min-width: 460px; }
+  figcaption { font-size: .85rem; color: var(--muted); max-width: 62ch; }
+  figcaption b { color: var(--ink); font-weight: 600; }
+
+  /* ---- tables ---- */
+  .tablewrap { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; min-width: 32rem; }
+  th, td { text-align: left; padding: .5rem .75rem; border-bottom: 1px solid var(--rule); }
+  th {
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed; text-transform: uppercase; letter-spacing: .1em;
+    font-size: .7rem; color: var(--muted); background: var(--sunk);
+  }
+  td.num, th.num { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+                   font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+
+  /* ---- checklist ---- */
+  .list { display: flex; flex-direction: column; border: 1px solid var(--rule); background: var(--surface); }
+  .item { display: grid; grid-template-columns: auto 1fr auto; gap: .85rem;
+          padding: .7rem .9rem; border-bottom: 1px solid var(--rule); align-items: start; }
+  .item:last-child { border-bottom: 0; }
+  .item input { appearance: none; width: 1.15rem; height: 1.15rem; margin: .2rem 0 0;
+                border: 1.5px solid var(--rule-strong); background: var(--ground);
+                cursor: pointer; flex: none; position: relative; }
+  .item input:checked { background: var(--teal); border-color: var(--teal); }
+  .item input:checked::after {
+    content: ""; position: absolute; left: .32rem; top: .09rem;
+    width: .3rem; height: .62rem; border: solid var(--surface);
+    border-width: 0 2px 2px 0; transform: rotate(42deg);
+  }
+  .item input:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .item input:checked ~ .body { opacity: .45; text-decoration: line-through;
+                                text-decoration-thickness: 1px; }
+  .body strong { font-weight: 600; display: block; }
+  .body span { font-size: .84rem; color: var(--muted); display: block; }
+  .price { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+           font-size: .82rem; color: var(--amber); font-variant-numeric: tabular-nums;
+           white-space: nowrap; text-decoration: none; border-bottom: 1px solid var(--amber-soft);
+           padding: .15rem .1rem; }
+  a.price:hover, a.price:focus-visible { border-bottom-color: var(--amber); }
+  a.price:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  .callout { border-left: 3px solid var(--amber); background: var(--amber-soft);
+             padding: .8rem 1rem; font-size: .9rem; }
+  .callout strong { font-weight: 650; }
+
+  code { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+         font-size: .86em; background: var(--sunk); padding: .1em .35em;
+         border: 1px solid var(--rule); }
+
+  .totals { display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: .85rem; color: var(--muted); }
+  .totals b { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* ---- scroll-driven assembly ---- */
+  /* The drawing sticks while the steps scroll past it, and each part drops into
+     place as you reach the step that installs it. The exploded state is applied
+     only once JS confirms it can drive the sequence (.live) — without it, or
+     with reduced motion, the figure renders fully assembled instead of blank. */
+  /* Narrow: model on top, sticky, steps scrolling under it.
+     Wide: steps on the left, model parked on the right where it stays in view
+     for the whole read. DOM order is figure-then-steps (so the model leads on a
+     phone); the grid placement below swaps them on a desktop. */
+  .scrolly { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+  .scrolly-fig { position: sticky; top: .5rem; z-index: 1; align-self: start; }
+  .scrolly-fig figure { background: var(--surface); box-shadow: var(--shadow); }
+  .scrolly-fig .figscroll { overflow: visible; }
+  #asm { width: 100%; min-width: 0; max-height: 52vh; }
+
+  /* Two columns only once there is genuinely room for a readable measure
+     alongside the model — below that, stacked reads better than cramped. */
+  @media (min-width: 68rem) {
+    /* The figure gets the larger share now. Its labels hold a fixed screen size
+       while the model scales, so a narrow column spends most of its width on
+       label text and leaves the case tiny — at the old 1.35fr for the steps the
+       case rendered about 164px across. */
+    .scrolly { grid-template-columns: minmax(24rem, 1fr) minmax(0, 1.15fr); gap: 2.5rem; }
+    .scrolly-fig { grid-column: 2; grid-row: 1; top: 1.5rem; }
+    .scrolly .steps { grid-column: 1; grid-row: 1; }
+  }
+
+  .part { transition: transform .55s cubic-bezier(.22,.68,.28,1), opacity .35s ease; }
+  #asm.live .part { transform: translateX(var(--dx)); opacity: 0; }
+  #asm.live .part.in { transform: translateX(0); opacity: 1; }
+
+  .hint { font-size: .8rem; color: var(--muted); }
+  .figbar { display: flex; align-items: center; justify-content: space-between;
+            gap: .9rem; flex-wrap: wrap; }
+  .btn {
+    font: inherit; font-size: .78rem;
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed; text-transform: uppercase; letter-spacing: .1em;
+    background: var(--ground); color: var(--ink);
+    border: 1.5px solid var(--rule-strong); padding: .35rem .8rem; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--amber); color: var(--amber); }
+  .btn:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+  /* ---- 3D assembly model ----
+     Boxes built from CSS 3D transforms — no library, which matters because the
+     artifact CSP blocks external scripts. Faces are translucent so you can read
+     the stack through the case, which is the whole point of the drawing. */
+  /* Labels ride in the 3D scene so each one stays attached to its part as you
+     rotate, but counter-rotate by the scene's own angles so the text always
+     faces you, and counter-scale by --fit so it stays legible when the model is
+     shrunk to fit. Reading --rx/--ry/--fit works because they are custom
+     properties set on the stage and scene, so they inherit down here. */
+  .lblpos {
+    position: absolute;
+    left: 0; top: 0;
+    transform-style: preserve-3d;
+    transform: translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0));
+    transition: transform .6s cubic-bezier(.22,.68,.28,1);
+  }
+  @media (prefers-reduced-motion: reduce) { .lblpos { transition: none; } }
+
+  .lbl3d {
+    position: absolute;
+    left: 0; top: 0;
+    white-space: nowrap;
+    font-family: "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-stretch: condensed;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    font-size: 11px;
+    line-height: 1.25;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--rule-strong);
+    padding: .12rem .34rem;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    transform:
+      rotateY(calc(-1 * var(--ry, 0deg)))
+      rotateX(calc(-1 * var(--rx, 0deg)))
+      scale(calc(1 / var(--sc, 1)))
+      translate(-50%, -50%);
+  }
+  .lbl3d.in { opacity: 1; }
+
+  /* Leader lines stay in the scene rather than billboarding: the line joins two
+     places in the model, so it has to foreshorten with them. One axis is always
+     1px, set from script along with the length. */
+  .lead3d {
+    position: absolute;
+    left: 0; top: 0;
+    background: var(--rule-strong);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    transform:
+      translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0))
+      translate(-50%, -50%);
+    transition: opacity .35s ease,
+                transform .6s cubic-bezier(.22,.68,.28,1);
+  }
+  .lead3d.in { opacity: .8; }
+
+  /* A terminator, so a leader crossing the panels reads as pointing at
+     something rather than as part of the panel artwork. */
+  .dot3d {
+    position: absolute;
+    left: 0; top: 0;
+    width: 7px; height: 7px;
+    background: var(--amber);
+    /* A ring in the surface colour, so the dot still reads when it lands on a
+       translucent panel rather than on the empty background. */
+    box-shadow: 0 0 0 1.5px var(--surface);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .35s ease;
+    transform:
+      translate3d(var(--lx, 0), var(--ly, 0), var(--lz, 0))
+      translate(-50%, -50%);
+    transition: opacity .35s ease,
+                transform .6s cubic-bezier(.22,.68,.28,1);
+  }
+  .dot3d.in { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .dot3d { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .lead3d { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .lbl3d { transition: none; } }
+
+  .stage {
+    perspective: 1500px;
+    /* Taller than it was: the labels replaced a long caption, so the drawing
+       gets that space back. */
+    height: clamp(360px, 62vh, 640px);
+    display: grid; place-items: center;
+    cursor: grab; touch-action: none; overflow: hidden;
+    background: var(--sunk); border: 1px solid var(--rule);
+  }
+  .stage:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  .stage:active { cursor: grabbing; }
+  .scene {
+    position: relative; width: 0; height: 0;
+    transform-style: preserve-3d;
+    transform: scale(var(--sc,1)) rotateX(var(--rx,-18deg)) rotateY(var(--ry,-32deg));
+  }
+  .box { position: absolute; transform-style: preserve-3d;
+         transition: transform .6s cubic-bezier(.22,.68,.28,1), opacity .4s ease; }
+  .face { position: absolute; border: 1px solid var(--edge);
+          background: var(--fill); box-sizing: border-box; }
+  /* Part palette — meaning, not decoration: wood, panel, electronics, glazing. */
+  .box.wood  { --edge: var(--ink);   --fill: rgba(140,110,70,.20); }
+  .box.panel { --edge: var(--ink);   --fill: rgba(40,60,90,.34); }
+  .box.pcb   { --edge: var(--amber); --fill: rgba(232,137,12,.26); }
+  .box.glass { --edge: var(--teal);  --fill: rgba(60,160,175,.14); }
+  .box.stand { --edge: var(--muted); --fill: rgba(128,128,128,.35); }
+  .box.steel { --edge: var(--muted); --fill: rgba(90,100,110,.55); }
+  /* Declared last so it beats the palette classes at equal specificity. Lights
+     the part its label names, which is the only reliable way to point at
+     something sitting behind two translucent panels. */
+  .box.lit { --edge: var(--amber); --fill: rgba(232,137,12,.55); }
+  .box.hat    { --edge: var(--amber); --fill: rgba(232,137,12,.45); }
+  .box.ribbon { --edge: var(--muted); --fill: rgba(150,155,165,.5); }
+  .box.screw  { --edge: var(--rule-strong); --fill: rgba(70,78,88,.75); }
+
+  /* ---- steps ----
+     Compact list; the active step is whichever one sits nearest the focus line
+     a quarter of the way down the viewport (see FOCUS in the script), so the
+     step you are reading is the step the model is showing. */
+  /* The trailing space matters: sticky only holds while its container is in
+     view, so without room after the last step the model scrolls off screen
+     before the case finishes assembling — and you never see it complete. This
+     keeps it parked for a beat on the finished build. */
+  ol.steps { margin: 0; padding: 0 0 45vh; list-style: none; counter-reset: step;
+             display: flex; flex-direction: column; gap: 1.15rem; }
+  /* The marker is absolutely positioned, NOT a grid item: making the li a grid
+     container turns every inline element inside it (<strong>, <code>) into its
+     own grid cell, and the prose after them wraps into the marker column. */
+  ol.steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 2.5rem;
+    font-size: .95rem; opacity: .4;
+    transition: opacity .3s ease;
+  }
+  ol.steps li.active { opacity: 1; }
+  ol.steps li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: .1rem;
+    width: 1.6rem; height: 1.6rem;
+    border: 1.5px solid var(--rule-strong); color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .8rem; display: grid; place-items: center;
+    transition: border-color .3s ease, color .3s ease, background .3s ease;
+  }
+  ol.steps li.active::before { border-color: var(--amber); color: var(--amber);
+                               background: var(--amber-soft); }
+  ol.steps strong { font-weight: 650; }
+  /* No JS / reduced motion: a plain readable list, nothing dimmed, and no
+     trailing space held open for an animation that is not running. */
+  ol.steps.static { padding-bottom: 0; }
+  ol.steps.static li { opacity: 1; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="sheet">
+
+  <header class="titleblock">
+    <h1>LED sign enclosure — build sheet &amp; buy list</h1>
+    <div class="meta">
+      <div class="cell"><span class="lbl">Display</span><span class="val">2 × 64×64 P3</span></div>
+      <div class="cell"><span class="lbl">Finished size</span><span class="val">16¾ × 9¼ × 2½ in</span></div>
+      <div class="cell"><span class="lbl">Tools needed</span><span class="val">saw · drill · iron · level</span></div>
+      <div class="cell"><span class="lbl">Build time</span><span class="val">~3 hrs + finish</span></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>The design <span class="sheetno">Sheet 1 — drawings</span></h2>
+    <p>A shadow box: four pieces of 1×3, an acrylic face, and a plywood back that carries
+      the panels and the Pi as one removable unit. No joinery beyond butt joints and screws,
+      and Home Depot can make every wood cut for you.</p>
+
+    <figure>
+      <div class="figscroll">
+        <svg viewBox="0 0 660 300" role="img" aria-label="Exploded view: acrylic face, 1 by 3 frame, panels on standoffs, and plywood back carrying the Raspberry Pi, assembled front to back">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- layer 1: acrylic -->
+          <rect x="40" y="60" width="86" height="170" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="40" y1="60" x2="126" y2="230" stroke="currentColor" stroke-width=".5" opacity=".35"/>
+          <text x="83" y="252" text-anchor="middle" font-size="12" fill="currentColor">Acrylic face</text>
+          <text x="83" y="268" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">0.093 in</text>
+
+          <!-- layer 2: frame -->
+          <rect x="190" y="60" width="86" height="170" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="203" y="76" width="60" height="138" fill="none" stroke="currentColor" stroke-width="1" opacity=".55"/>
+          <text x="233" y="252" text-anchor="middle" font-size="12" fill="currentColor">1×3 frame</text>
+          <text x="233" y="268" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">2½ in deep</text>
+
+          <!-- layer 3: panels -->
+          <rect x="340" y="70" width="40" height="150" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="386" y="70" width="40" height="150" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <g opacity=".4" stroke="currentColor" stroke-width=".5">
+            <line x1="340" y1="107" x2="380" y2="107"/><line x1="340" y1="145" x2="380" y2="145"/>
+            <line x1="340" y1="183" x2="380" y2="183"/>
+            <line x1="386" y1="107" x2="426" y2="107"/><line x1="386" y1="145" x2="426" y2="145"/>
+            <line x1="386" y1="183" x2="426" y2="183"/>
+          </g>
+          <text x="383" y="252" text-anchor="middle" font-size="12" fill="currentColor">Panels ×2</text>
+          <text x="383" y="268" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">on 1¾ in spacers</text>
+
+          <!-- layer 4: back + pi -->
+          <rect x="490" y="60" width="86" height="170" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <rect x="512" y="120" width="44" height="62" fill="none" stroke="var(--amber)" stroke-width="1.5"/>
+          <text x="534" y="156" text-anchor="middle" font-size="10" fill="var(--amber)">Pi</text>
+          <text x="533" y="252" text-anchor="middle" font-size="12" fill="currentColor">¼ in plywood back</text>
+          <text x="533" y="268" text-anchor="middle" font-size="11" fill="currentColor" opacity=".65">removable — 4 screws</text>
+
+          <!-- assembly arrows, pointing forward (right to left) -->
+          <g stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)" opacity=".7">
+            <line x1="180" y1="40" x2="136" y2="40"/>
+            <line x1="330" y1="40" x2="286" y2="40"/>
+            <line x1="480" y1="40" x2="436" y2="40"/>
+          </g>
+          <text x="330" y="26" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">assembles front ←</text>
+        </svg>
+      </div>
+      <figcaption><b>Everything mounts to the back panel.</b> Undo the four corner screws and the
+        panels, the Pi and all the wiring lift out as one piece — which is what you want the first
+        time a jumper needs soldering. Note the cost, though: there is no hatch, so this is the
+        <em>only</em> way in. Reaching the Pi means taking the sign down and opening the back on a
+        table. The design leans on never needing to — see
+        <a href="#commissioning">commissioning</a>, where updates arrive over the network.</figcaption>
+    </figure>
+
+    <figure>
+      <div class="figscroll">
+        <svg viewBox="0 0 660 380" role="img" aria-label="Front elevation with dimensions: 16 and three quarter inches wide by 9 and one quarter inches tall outside, 15 and a quarter by 7 and three quarter inch opening, two 7 and nine sixteenths inch square panels">
+          <defs>
+            <marker id="d1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--amber)"/>
+            </marker>
+          </defs>
+
+          <!-- outer frame -->
+          <rect x="100" y="60" width="460" height="254" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <!-- inner opening -->
+          <rect x="121" y="81" width="418" height="212" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <!-- panels -->
+          <rect x="122" y="84" width="207" height="207" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".8"/>
+          <rect x="331" y="84" width="207" height="207" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".8"/>
+          <g opacity=".22" stroke="currentColor" stroke-width=".5">
+            <line x1="122" y1="136" x2="538" y2="136"/><line x1="122" y1="188" x2="538" y2="188"/>
+            <line x1="122" y1="240" x2="538" y2="240"/>
+            <line x1="174" y1="84" x2="174" y2="291"/><line x1="226" y1="84" x2="226" y2="291"/>
+            <line x1="278" y1="84" x2="278" y2="291"/>
+            <line x1="383" y1="84" x2="383" y2="291"/><line x1="435" y1="84" x2="435" y2="291"/>
+            <line x1="487" y1="84" x2="487" y2="291"/>
+          </g>
+          <text x="225" y="192" text-anchor="middle" font-size="12" fill="currentColor" opacity=".6">panel 1</text>
+          <text x="434" y="192" text-anchor="middle" font-size="12" fill="currentColor" opacity=".6">panel 2</text>
+
+          <!-- overall width dimension -->
+          <g stroke="var(--amber)" stroke-width="1">
+            <line x1="100" y1="340" x2="560" y2="340" marker-start="url(#d1)" marker-end="url(#d1)"/>
+            <line x1="100" y1="320" x2="100" y2="346" stroke-width=".8"/>
+            <line x1="560" y1="320" x2="560" y2="346" stroke-width=".8"/>
+          </g>
+          <text x="330" y="362" text-anchor="middle" font-size="12.5" fill="var(--amber)">16¾ in overall</text>
+
+          <!-- opening width -->
+          <g stroke="var(--amber)" stroke-width="1">
+            <line x1="121" y1="306" x2="539" y2="306" marker-start="url(#d1)" marker-end="url(#d1)"/>
+          </g>
+          <text x="330" y="302" text-anchor="middle" font-size="11.5" fill="var(--amber)">15¼ × 7¾ in opening</text>
+
+          <!-- overall height -->
+          <g stroke="var(--amber)" stroke-width="1">
+            <line x1="76" y1="60" x2="76" y2="314" marker-start="url(#d1)" marker-end="url(#d1)"/>
+            <line x1="66" y1="60" x2="86" y2="60" stroke-width=".8"/>
+            <line x1="66" y1="314" x2="86" y2="314" stroke-width=".8"/>
+          </g>
+          <text x="60" y="192" text-anchor="middle" font-size="12.5" fill="var(--amber)" transform="rotate(-90 60 192)">9¼ in overall</text>
+
+          <!-- panel size -->
+          <g stroke="var(--amber)" stroke-width="1">
+            <line x1="580" y1="84" x2="580" y2="291" marker-start="url(#d1)" marker-end="url(#d1)"/>
+          </g>
+          <text x="598" y="192" text-anchor="middle" font-size="11.5" fill="var(--amber)" transform="rotate(-90 598 192)">7⁹⁄₁₆ in sq</text>
+
+          <!-- frame thickness callout -->
+          <line x1="100" y1="46" x2="121" y2="46" stroke="var(--amber)" stroke-width="1" marker-start="url(#d1)" marker-end="url(#d1)"/>
+          <text x="128" y="42" font-size="11" fill="var(--amber)">¾ in stock</text>
+        </svg>
+      </div>
+      <figcaption><b>Front elevation.</b> Each panel is exactly 192 mm (7⁹⁄₁₆ in) square, so the
+        pair is 15⅛ in wide. The <b>seam down the middle must be zero</b> — the pixel grid runs
+        across it — while the 3–5 mm around the outside is deliberate slack, since the panels
+        hang off their bolts and a snug wooden opening cracks a PCB when the wood moves. Every
+        number here comes from <code>cad/params.py</code>, and <code>cad/test_fit.py</code>
+        asserts them on every build.</figcaption>
+    </figure>
+
+    <h3>Cut list</h3>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Part</th><th class="num">Qty</th><th class="num">Size</th><th>Material</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Frame — top &amp; bottom</td><td class="num">2</td><td class="num">16¾ in</td><td>1×3 pine</td></tr>
+          <tr><td>Frame — sides</td><td class="num">2</td><td class="num">7¾ in</td><td>1×3 pine</td></tr>
+          <tr><td>Back panel</td><td class="num">1</td><td class="num">16¾ × 9¼ in</td><td>¼ in plywood</td></tr>
+          <tr><td>Face</td><td class="num">1</td><td class="num">16¾ × 9¼ in</td><td>Acrylic 0.093 in</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <strong>Who cuts what.</strong> Every dimension here is a whole eighth of an inch, because
+      that is about the tolerance a store panel saw holds — asking for sixteenths is asking for
+      precision nobody can verify.
+      <br><br>
+      <strong>Let Home Depot cut the plywood.</strong> Breaking down a sheet by hand is awkward,
+      and the back panel is hidden — a sixteenth out costs you nothing.
+      <br><br>
+      <strong>Cut the 1×3 yourself</strong>, with a $15 miter box. It holds the saw square for
+      you, it is more accurate than the store's saw, and these are the cuts that decide whether
+      your frame is square. <em>What matters is that each pair matches</em> — if both sides come
+      out 7¹³⁄₁₆ the frame is still square and the panels still fit, but one at 7¾ and one at 7⅞
+      is a parallelogram forever. Cut one, then lay it on the board to mark the second rather
+      than measuring again.
+      <br><br>
+      <strong>The acrylic is yours either way</strong> — they don't cut it. Score 6–8 passes
+      against a straightedge, then snap it over a table edge.
+    </div>
+  </section>
+
+  <section>
+    <h2>Power — getting to one plug <span class="sheetno">Sheet 2 — electrical</span></h2>
+    <p>Adafruit's guidance is to keep the panel supply and the Pi supply separate — when the panels
+      pull a current spike, a shared 5 V rail sags, and a Pi that browns out mid-write can corrupt
+      the SD card. So: two supplies, one outlet. One 5 V supply to the Pi; one to the HAT's screw
+      terminal, which feeds the panels through the Y-cable.</p>
+    <div class="note" style="border-left:3px solid var(--amber);padding:.4rem .8rem;margin:.6rem 0">
+      <strong>Current, fusing, ground — the numbers behind the diagram.</strong>
+      <ul>
+        <li><strong>Budget:</strong> two 64×64 panels draw ~3–4 A <em>each</em> at full white, so
+          ~8 A peak — a 5 V 10 A brick on the HAT sits ~80 % loaded, which is where you want it.
+          (dizzyos ships <code>brightness: 70</code>; the supply is sized on that — raising it toward
+          100 from the settings page raises the draw, so don't size the brick to the shipped value
+          and then turn it up.)</li>
+        <li><strong>Wire gauge:</strong> any lead you make that carries the full panel current — the
+          brick-to-terminal lead and the Y-cable legs — should be <strong>≥16 AWG</strong> for 8 A
+          over a short run; the pre-made Adafruit Y-cable already is.</li>
+        <li><strong>Fuse:</strong> put an inline <strong>7.5–10 A</strong> fuse on the 5 V panel rail
+          between the brick and the HAT terminal. It is a sealed wooden box on a wall; a shorted
+          ribbon should blow a fuse, not cook a supply.</li>
+        <li><strong>Ground:</strong> the two supplies' grounds must be common — they are, through the
+          HUB75 ribbon, but that path is load-bearing and easy to forget, so tie the 5 V grounds
+          together at the terminal too.</li>
+        <li><strong>Back-feed:</strong> on this HAT the terminal's 5 V is bussed to the Pi's 5 V pins,
+          so with a separate Pi USB supply the two 5 V sources are paralleled. Both are regulated
+          5 V with common ground, so this works, but if you'd rather avoid it, power the Pi <em>from</em>
+          the HAT terminal on one supply instead.</li>
+      </ul>
+    </div>
+
+    <figure>
+      <div class="figscroll">
+        <svg viewBox="0 0 660 260" role="img" aria-label="Wiring: one wall outlet feeds a power strip, which feeds the 5 volt 10 amp brick to the HAT and panels, and the Pi's own USB supply to the Pi">
+          <defs>
+            <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <rect x="30" y="100" width="96" height="52" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="78" y="122" text-anchor="middle" font-size="12" fill="currentColor">Wall</text>
+          <text x="78" y="138" text-anchor="middle" font-size="12" fill="currentColor">outlet</text>
+
+          <rect x="176" y="100" width="104" height="52" fill="none" stroke="var(--amber)" stroke-width="2"/>
+          <text x="228" y="122" text-anchor="middle" font-size="12" fill="var(--amber)">Power strip</text>
+          <text x="228" y="138" text-anchor="middle" font-size="11" fill="var(--amber)">the “one plug”</text>
+
+          <rect x="336" y="42" width="118" height="52" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="395" y="64" text-anchor="middle" font-size="12" fill="currentColor">5 V 10 A brick</text>
+          <text x="395" y="80" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">barrel plug</text>
+
+          <rect x="336" y="158" width="118" height="52" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="395" y="180" text-anchor="middle" font-size="12" fill="currentColor">Pi USB supply</text>
+          <text x="395" y="196" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">5 V 2.5 A</text>
+
+          <rect x="504" y="42" width="126" height="52" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="567" y="64" text-anchor="middle" font-size="12" fill="currentColor">HAT → panels</text>
+          <text x="567" y="80" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">terminal block</text>
+
+          <rect x="504" y="158" width="126" height="52" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="567" y="188" text-anchor="middle" font-size="12" fill="currentColor">Raspberry Pi</text>
+
+          <g stroke="currentColor" stroke-width="1.3" fill="none" marker-end="url(#a2)">
+            <line x1="126" y1="126" x2="170" y2="126"/>
+            <path d="M 280 118 L 308 118 L 308 68 L 330 68"/>
+            <path d="M 280 134 L 308 134 L 308 184 L 330 184"/>
+            <line x1="454" y1="68" x2="498" y2="68"/>
+            <line x1="454" y1="184" x2="498" y2="184"/>
+          </g>
+          <text x="308" y="34" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">separate rails — no shared sag</text>
+        </svg>
+      </div>
+      <figcaption><b>One cord to the wall, two supplies inside.</b> A barrel Y-splitter off the
+        single 10 A brick would also work and looks tidier, but it's the arrangement Adafruit
+        advises against — and a corrupted SD card costs more than a power strip.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Home Depot — Midtown East <span class="sheetno">Sheet 3 — buy list</span></h2>
+    <p>One trip covers everything, soldering included. Essentials first — skip nothing in that
+      list — then tools you may already own, then the optional things with what each one actually
+      gets you.</p>
+    <div class="callout">
+      <strong>Rosin core, never acid core.</strong> The plumbing aisle sells acid-core solder and
+      paste flux for copper pipe. Acid flux corrodes electronics and will eat the HAT over
+      weeks. Buy <em>rosin-core electronics solder</em> from the tools/welding aisle. If the
+      label says plumbing, water-soluble, or acid, put it back.
+    </div>
+
+    <h3>Essentials — the build doesn't happen without these</h3>
+    <div class="list">
+      <label class="item"><input type="checkbox"><span class="body"><strong>1×3 select pine or poplar, 6 ft</strong><span>You need 49 in; a 6 ft board leaves margin for a bad cut</span></span><a class="price" href="https://www.homedepot.com/s/1x3%20select%20pine%20board" target="_blank" rel="noopener">$10 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>¼ in plywood — 2×2 ft handy panel</strong><span>The back. Birch ply looks better than sanded pine if they have it</span></span><a class="price" href="https://www.homedepot.com/s/1%2F4%20in%20plywood%20project%20panel" target="_blank" rel="noopener">$12 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>OPTIX acrylic sheet, 18×24 in × 0.093 in — CLEAR</strong><span>Not white (opaque, blocks the display) and not frosted (pricey, often out of stock). Buy clear and frost it yourself if you want to — see below</span></span><a class="price" href="https://www.homedepot.com/s/optix%20acrylic%20sheet%20clear" target="_blank" rel="noopener">$18 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Acrylic scoring tool</strong><span>They won't cut acrylic for you. Score 6–8 passes, snap over a table edge</span></span><a class="price" href="https://www.homedepot.com/s/acrylic%20scoring%20tool" target="_blank" rel="noopener">$7 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Sandpaper, 120 &amp; 220 grit</strong><span>Smoothing the wood, and easing the sharp cut edge of the acrylic</span></span><a class="price" href="https://www.homedepot.com/s/sandpaper%20assortment" target="_blank" rel="noopener">$7 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Wood glue (Titebond II)</strong><span>The joint's actual strength — glue is stronger than the wood; screws just clamp it while it dries</span></span><a class="price" href="https://www.homedepot.com/s/titebond%20II%20wood%20glue" target="_blank" rel="noopener">$6 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>#6 × 1¼ in wood screws</strong><span>Frame corners</span></span><a class="price" href="https://www.homedepot.com/s/%236%20x%201-1%2F4%20in%20wood%20screws" target="_blank" rel="noopener">$7 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>#6 × ⅝ in wood screws</strong><span>Back panel and face — short enough not to punch through ¾ in stock</span></span><a class="price" href="https://www.homedepot.com/s/%236%20x%205%2F8%20in%20wood%20screws" target="_blank" rel="noopener">$7 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>M3 × 55 mm machine screws, 8 — <em>no nuts needed</em></strong><span>Metric drawer in the fastener aisle. Long because each one crosses the back board and both spacers — 50.8 mm — before it reaches the panel at all. The panel's holes are threaded, so the screw bites into the panel itself rather than taking a nut</span></span><a class="price" href="https://www.homedepot.com/s/m3%20machine%20screw" target="_blank" rel="noopener">$8 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Nylon spacers — 1 in and ¾ in, 8 of each, plus 4 × ¼ in</strong><span>Stacked, they make the 1¾ in that stands the panels just behind the acrylic. Buy both sizes: their spacers stop at 1 in, so no single one is long enough. Get the narrow-bore 1 in (0.171 in I.D.) so it guides the M3 screw rather than letting it rattle. The four ¼ in ones are for the Pi</span></span><a class="price" href="https://www.homedepot.com/b/Hardware-Fasteners-Spacers/Nylon/N-5yc1vZc2fdZ1z0vn0d" target="_blank" rel="noopener">$10 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Keyhole hangers, 2</strong><span>How it goes on the wall. Rated far past the sign's ~2.3 kg; site them so their screws reach the frame's top rail, not just the thin plywood</span></span><a class="price" href="https://www.homedepot.com/s/keyhole%20hanger" target="_blank" rel="noopener">$5 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Recessed magnetic catches, 2</strong><span>Hold the middle of the back flat between the corner screws. Magnets because they can sit flush — a latch or thumbscrew would stand proud of a wall-hung back</span></span><a class="price" href="https://www.homedepot.com/s/magnetic%20catch" target="_blank" rel="noopener">$7 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Drywall anchors, 10 kg rated</strong><span>Only if you cannot hit a stud. Skip if you can</span></span><a class="price" href="https://www.homedepot.com/s/drywall%20anchor" target="_blank" rel="noopener">$6 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>M2.5 × 20 mm machine screws + M2.5 nuts, 4 each</strong><span>For the Pi, whose holes are plain through-holes. Same metric drawer as the M3 — Home Depot does stock M2.5, just not the threaded standoffs an electronics shop sells</span></span><a class="price" href="https://www.homedepot.com/b/Hardware-Fasteners-Screws-Machine-Screws/M25/Metric/N-5yc1vZc27iZ1z0sc32Z1z0sfxi" target="_blank" rel="noopener">$8 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Weller soldering iron kit, 30–60 W</strong><span>The two HAT jumpers. Without them: dark bands across the panels and permanent flicker</span></span><a class="price" href="https://www.homedepot.com/b/Tools-Welding-Soldering-Brazing-Soldering-Equipment-Soldering-Irons/Weller/N-5yc1vZ1z18gw8Z1lw" target="_blank" rel="noopener">$25 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Rosin-core solder, thin gauge</strong><span><strong>Not</strong> the plumbing aisle's acid-core — acid flux corrodes electronics</span></span><a class="price" href="https://www.homedepot.com/b/Tools-Welding-Soldering-Brazing-Soldering-Equipment-Solder-Solder-Wire/Rosin-Cored/N-5yc1vZ1z18gvgZ1z1a2o8" target="_blank" rel="noopener">$12 ↗</a></label>
+    </div>
+    <div class="totals"><span>Essentials: <b>~$148</b></span></div>
+
+    <h3>Tools — skip anything you already own</h3>
+    <div class="list">
+      <label class="item"><input type="checkbox"><span class="body"><strong>Cordless drill + bit set</strong><span>Pilot holes are not optional — a screw near the end of a board splits it without one</span></span><a class="price" href="https://www.homedepot.com/s/cordless%20drill%20kit" target="_blank" rel="noopener">$60 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Miter box + back saw</strong><span>The four 1×3 cuts. The box holds the saw square for you — more accurate than the store's saw, on the cuts that decide whether your frame is square</span></span><a class="price" href="https://www.homedepot.com/s/miter%20box%20and%20saw" target="_blank" rel="noopener">$18 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Bar clamps, 2 × 12 in</strong><span>Hold each corner while the glue grabs. Two is the minimum</span></span><a class="price" href="https://www.homedepot.com/s/bar%20clamp%2012%20in" target="_blank" rel="noopener">$20 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Tape measure</strong><span>For the diagonals check, which is the only squareness test you need</span></span><a class="price" href="https://www.homedepot.com/s/tape%20measure" target="_blank" rel="noopener">$12 ↗</a></label>
+    </div>
+    <div class="totals"><span>If you own none of them: <b>~$110</b></span></div>
+
+    <h3>Optional — and what each one buys you</h3>
+    <div class="list">
+      <label class="item"><input type="checkbox"><span class="body"><strong>Multimeter</strong><span>Continuity mode proves a solder joint actually connected, and catches reversed polarity <em>before</em> you apply power. The cheapest insurance on this list</span></span><a class="price" href="https://www.homedepot.com/s/multimeter" target="_blank" rel="noopener">$25 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Matte black paint + brush</strong><span>For the inside of the opening. Bare wood in there catches LED light and glows as a halo behind the acrylic</span></span><a class="price" href="https://www.homedepot.com/s/matte%20black%20spray%20paint" target="_blank" rel="noopener">$14 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Frosted window film</strong><span>Hides the black grid between the LEDs and stops the acrylic mirroring the room. Decide with the sign lit — step 25</span></span><a class="price" href="https://www.homedepot.com/s/frosted%20privacy%20window%20film" target="_blank" rel="noopener">$12 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Power strip</strong><span>Two supplies, one cord to the wall. The tidy answer to "can it be one plug"</span></span><a class="price" href="https://www.homedepot.com/s/power%20strip" target="_blank" rel="noopener">$12 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Adhesive felt pads</strong><span>Between the acrylic and the frame it screws to. The panels no longer touch the face — the spacers hold them 4 mm back — but the sheet itself can still buzz against bare wood</span></span><a class="price" href="https://www.homedepot.com/s/adhesive%20felt%20pads" target="_blank" rel="noopener">$5 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Safety glasses</strong><span>Snapping acrylic throws chips</span></span><a class="price" href="https://www.homedepot.com/s/safety%20glasses" target="_blank" rel="noopener">$5 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Zip ties + adhesive mounts</strong><span>Keeps ribbon and power cable off the back of the panels instead of draped over them</span></span><a class="price" href="https://www.homedepot.com/s/zip%20tie%20adhesive%20mount" target="_blank" rel="noopener">$8 ↗</a></label>
+    </div>
+    <div class="totals"><span>All optional: <b>~$81</b></span></div>
+  </section>
+
+  <section>
+    <h2>Micro Center — only if you want to <span class="sheetno">Sheet 4 — optional</span></h2>
+    <p>Home Depot covers the whole job — the panel spacers included, once you stack two. Micro
+      Center is worth the trip only for better tools, the Pi's own standoffs, and the couple of
+      things Home Depot genuinely doesn't stock.</p>
+
+    <div class="list">
+      <label class="item"><input type="checkbox"><span class="body"><strong>M2.5 threaded standoff kit — optional</strong><span>Tidier than the screw-spacer-nut stack for the Pi, and the one thing here Home Depot really doesn't carry. Buy it if you want the Pi to come off in one move; the Home Depot version works fine otherwise</span></span><a class="price" href="https://www.microcenter.com/search/search_results.aspx?Ntt=M2.5%20standoff%20kit" target="_blank" rel="noopener">$10 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Flux pen</strong><span>Home Depot's flux is plumbing acid flux — wrong kind. Not essential, but it makes solder behave</span></span><a class="price" href="https://www.microcenter.com/search/search_results.aspx?Ntt=flux%20pen" target="_blank" rel="noopener">$8 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Desoldering braid</strong><span>Insurance if you bridge the wrong pads</span></span><a class="price" href="https://www.microcenter.com/search/search_results.aspx?Ntt=desoldering%20braid" target="_blank" rel="noopener">$5 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Temperature-controlled station</strong><span>Nicer than the Weller pencil, but overkill for two pads. Buy it if you'll solder again</span></span><a class="price" href="https://www.microcenter.com/search/search_results.aspx?Ntt=soldering%20station" target="_blank" rel="noopener">$40 ↗</a></label>
+      <label class="item"><input type="checkbox"><span class="body"><strong>Helping hands / PCB holder</strong><span>Or just wedge the HAT against something heavy</span></span><a class="price" href="https://www.microcenter.com/search/search_results.aspx?Ntt=helping%20hands%20soldering" target="_blank" rel="noopener">$15 ↗</a></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Assembly <span class="sheetno">Sheet 5 — build order</span></h2>
+    <p>Twenty-eight steps, written assuming you have never built anything. The model on the right
+      shows where you are: the frame goes together first, the electronics get built up on the
+      back board behind it, and that whole assembly seats into the case in one move near the end.</p>
+
+    <div class="scrolly">
+     <div class="scrolly-fig">
+      <figure>
+      <!-- 3D model, built by script from the same millimetre dimensions as
+           cad/params.py. The cross-section SVG below is the fallback and stays
+           visible if the script cannot run. -->
+      <div class="stage" id="stage3d" hidden>
+        <div class="scene" id="scene"></div>
+      </div>
+      <div class="figbar" id="figbar3d" hidden>
+        <span class="hint">Two-finger drag or arrows to rotate · pinch to zoom · 0 resets
+          · scroll over the steps to assemble</span>
+        <button type="button" class="btn" id="reset3d">Reset view</button>
+      </div>
+      <div class="figscroll" id="fallback2d">
+        <svg id="asm" viewBox="0 0 660 350" role="img" aria-label="Animated cross-section: the frame is built first, then the back board carrying panels and the Pi slides in from behind, then the acrylic face goes on the front">
+          <defs>
+            <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--amber)"/>
+            </marker>
+          </defs>
+
+          <text x="330" y="26" text-anchor="middle" font-size="11" fill="currentColor" opacity=".6">cross-section — front at left, depth exaggerated</text>
+
+          <!-- 1 · frame -->
+          <g class="part" style="--dx:0px; animation-delay:0s">
+            <rect x="200" y="60" width="120" height="18" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <rect x="200" y="262" width="120" height="18" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="176" cy="69" r="9" fill="none" stroke="var(--amber)" stroke-width="1.2"/>
+            <text x="176" y="73" text-anchor="middle" font-size="11" fill="var(--amber)">1</text>
+            <text x="152" y="52" text-anchor="end" font-size="11.5" fill="currentColor">1×3 frame</text>
+          </g>
+
+          <!-- 2 · back assembly: back board + standoffs + panels + Pi -->
+          <g class="part" style="--dx:200px; animation-delay:.75s">
+            <rect x="306" y="60" width="14" height="220" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <rect x="276" y="152" width="30" height="58" fill="none" stroke="var(--amber)" stroke-width="1.4"/>
+            <text x="291" y="185" text-anchor="middle" font-size="9.5" fill="var(--amber)">Pi</text>
+            <rect x="220" y="106" width="86" height="5" fill="none" stroke="currentColor" stroke-width="1" opacity=".7"/>
+            <rect x="220" y="226" width="86" height="5" fill="none" stroke="currentColor" stroke-width="1" opacity=".7"/>
+            <rect x="206" y="80" width="14" height="180" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="352" cy="170" r="9" fill="none" stroke="var(--amber)" stroke-width="1.2"/>
+            <text x="352" y="174" text-anchor="middle" font-size="11" fill="var(--amber)">2</text>
+            <text x="374" y="120" font-size="11.5" fill="currentColor">back board</text>
+            <text x="374" y="136" font-size="11" fill="currentColor" opacity=".65">carries panels + Pi</text>
+            <text x="374" y="222" font-size="11" fill="currentColor" opacity=".65">1¾ in spacers</text>
+          </g>
+
+          <!-- 3 · acrylic -->
+          <g class="part" style="--dx:-160px; animation-delay:1.5s">
+            <rect x="192" y="60" width="6" height="220" fill="none" stroke="currentColor" stroke-width="1.6"/>
+            <circle cx="164" cy="170" r="9" fill="none" stroke="var(--amber)" stroke-width="1.2"/>
+            <text x="164" y="174" text-anchor="middle" font-size="11" fill="var(--amber)">3</text>
+            <text x="142" y="300" text-anchor="middle" font-size="11.5" fill="currentColor">acrylic</text>
+            <line x1="150" y1="292" x2="192" y2="180" stroke="currentColor" stroke-width=".6" opacity=".5"/>
+          </g>
+
+          <!-- direction arrows, drawn last -->
+          <g class="part" style="--dx:0px; animation-delay:2.2s">
+            <line x1="420" y1="316" x2="336" y2="316" stroke="var(--amber)" stroke-width="1.2" marker-end="url(#a3)"/>
+            <text x="428" y="320" font-size="11" fill="var(--amber)">back board in</text>
+            <line x1="120" y1="316" x2="186" y2="316" stroke="var(--amber)" stroke-width="1.2" marker-end="url(#a3)"/>
+            <text x="112" y="320" text-anchor="end" font-size="11" fill="var(--amber)">face on</text>
+          </g>
+        </svg>
+      </div>
+     </figure>
+     </div>
+
+    <ol class="steps">
+      <li><strong>Cut the 1×3 to length.</strong> Two pieces at 16¾ in, two at 7¾ in. Clamp the
+        board in the miter box, saw in the vertical slot, and let the saw do the work — pushing
+        hard makes it wander. Cut one piece of each pair, then lay it on the board to mark the
+        second rather than measuring again: matching pairs matter far more than hitting the
+        number exactly.</li>
+
+      <li><strong>Lay everything out.</strong> Put the four frame pieces, the back board and the
+        acrylic on a flat surface — a floor is fine. Hold each pair side by side and check the
+        ends line up. If a pair doesn't match, trim the longer one now; nothing later fixes
+        it.</li>
+
+      <li><strong>Dry-fit the frame.</strong> "Dry-fit" means assemble it with no glue, just to
+        see that it goes together. Stand the two short pieces upright and lay the long ones
+        across the top and bottom, so the long pieces <em>cap the ends</em> of the short ones.
+        That's the arrangement you'll glue.</li>
+
+      <li><strong>Check it's square.</strong> Measure corner to opposite corner, both ways. The
+        two diagonals should be the same. If they differ, nudge the frame until they match — a
+        rectangle with equal diagonals is square, and it's the only check you need.</li>
+
+      <li><strong>Sand now, not later.</strong> 120-grit first, then 220. Sanding a loose board is
+        easy; sanding into the corners of a glued frame is miserable. Go with the grain — the
+        stripes in the wood — not across it.</li>
+
+      <li><strong>Mark your screw holes.</strong> On each long piece, make two pencil marks near
+        each end: about ½ in and 1½ in from the end, centered across the width. Eight marks
+        total. These land in the end of the short pieces underneath.</li>
+
+      <li><strong>Drill pilot holes.</strong> A pilot hole is a small hole drilled before the
+        screw. Use a bit slightly thinner than the screw's shaft. Skipping this is the classic
+        beginner mistake: a screw driven into bare wood near an end acts like a wedge and splits
+        the board. Drill through the long piece only, right through, at each mark.</li>
+
+      <li><strong>Glue and clamp the first corner.</strong> Thin bead of wood glue on the
+        <em>end</em> of a short piece, press the long piece over it, line the outside edges up
+        flush, and clamp. Squeeze-out — glue beading along the seam — means you used enough;
+        wipe it with a damp cloth now, because dried glue won't take stain.</li>
+
+      <li><strong>Drive the screws.</strong> Two screws through the pilot holes into the piece
+        beneath. Stop as soon as the head sits flush; a driver on full torque will strip the
+        hole and then the screw just spins. Now unclamp — the screws hold it.</li>
+
+      <li><strong>Do the other three corners.</strong> Same sequence each time: glue, line up
+        flush, clamp, screw. Work around the frame rather than doing two opposite corners first,
+        so any small error has somewhere to go.</li>
+
+      <li><strong>Leave the inside of the frame completely bare.</strong> No brackets, no blocks,
+        no cable clips — nothing on the four inner faces. This is a real constraint, not tidiness:
+        the panels have <strong>1.67 mm of clearance per side</strong>, and because the whole back
+        assembly slides in and out from behind, they sweep the full depth of the cavity on the way
+        through. A flat corner brace is about 2 mm of steel. Fit four and the panels will not go
+        in at all.
+        <br><br>
+        You do not need them anyway. The back board is the brace — a full-size sheet of plywood
+        screwed every 4 in around all four sides turns the frame into a rigid box, which is a
+        stiffer joint than four small L-brackets could give it. The glue is doing the real work
+        and the back panel is stopping the racking.</li>
+
+      <li><strong>Re-check square, then let the glue cure.</strong> Measure the diagonals again
+        before the glue sets; you can still persuade it. Then leave it alone for an hour.</li>
+
+      <li><strong>Paint the inside of the opening matte black.</strong> This is the part people
+        skip and regret. Any bare or light-colored wood inside the frame catches light from the
+        LEDs and glows as a halo behind the acrylic. Black makes it disappear. Then finish the
+        outside however you like and let it dry fully.</li>
+
+      <li><strong>Solder the two jumpers on the HAT — while it's loose.</strong> Two blobs: the
+        middle pad to <code>8</code>, and GPIO4 to GPIO18. Heat the pad with the iron for a
+        second, feed solder into the joint (not onto the iron), and let it flow across. Do this
+        now, on the bench, with the board in your hand — not later, bolted into a finished case.
+        Check each with a multimeter on continuity: it beeps when connected.</li>
+
+      <li><strong>Mark and drill the back board.</strong> Lay the back board down, sit both panels
+        on it face-down, positioned as they'll sit in the frame. Mark through the panels'
+        mounting holes with a pencil, lift the panels off, and drill at each mark with a bit just
+        big enough for an M3 screw to pass through. Four marks per panel, eight in all.
+        <br><br>
+        Note which way round this works: the plywood gets a clear hole the screw slides
+        through, while the panel's own holes are <em>threaded</em>. The screw drives in from
+        behind and bites into the panel — there is no nut anywhere in this joint.</li>
+
+      <li><strong>Fit the spacers.</strong> A spacer is a plain plastic tube that holds two
+        things a fixed distance apart — no thread on it; the screw simply passes through the
+        middle. Push an M3 screw up through each hole from the back, then slide a <strong>1 in
+        spacer and a ¾ in spacer</strong> over it, stacked end to end. That makes 1¾ in.
+        <br><br>
+        Two parts rather than one because Home Depot's spacers stop at 1 in. The distance you
+        actually want is 48.5 mm, and 1¾ in is 44.45 mm — about 4 mm short, which is the point.
+        Stacking to 2 in instead would overshoot by 2 mm, standing the panels proud of the frame
+        so the acrylic presses on them and bows. Short is free; long is a bowed face.</li>
+
+      <li><strong>Bolt on the first panel.</strong> Line its threaded holes up with the screws
+        poking through the spacers and drive each one in. Snug, not cranked. Only about 4 mm of
+        thread is engaged in the panel — a short bite in a small fitting — so it strips easily,
+        and a stripped inlet is not something you can repair.</li>
+
+      <li><strong>Bolt on the second panel — push it tight against the first.</strong> This is
+        the one place in the whole build with no tolerance. The pixels sit half a gap in from
+        each panel's edge, so when the two panels touch, the grid continues across the seam
+        perfectly. Leave even a couple of millimetres and you get a dark stripe down the middle
+        of every image — and the sign draws text straight across it. Press the second panel
+        firmly against the first, then tighten. Also sight along the faces from the side: they
+        should be level with each other, no step.</li>
+
+      <li><strong>Mount the Pi.</strong> The same sandwich as the panels, one size down and with
+        a nut on the end: an <strong>M2.5 × 20 mm</strong> screw up through the back board, a
+        <strong>¼ in spacer</strong>, through the Pi's corner hole, then a nut. Four of them.
+        <br><br>
+        The nut is needed here because the Pi's holes go straight through — unlike the panels,
+        there is no thread in the board to bite into. Keep the M2.5 hardware apart from the M3:
+        the sizes look identical in the hand and an M3 screw will not start in a Pi. Position the
+        board clear of the panel spacers, and where you can still reach the SD card slot with a
+        fingernail.</li>
+
+      <li><strong>Connect the ribbon cables.</strong> One from the HAT to panel 1's socket marked
+        <code>IN</code>; a second from panel 1's <code>OUT</code> to panel 2's <code>IN</code>.
+        The plugs are notched and only fit one way — if it resists, turn it over rather than
+        pushing harder.</li>
+
+      <li><strong>Wire the power.</strong> The Y-cable's two plugs go into the panels' power
+        sockets; its spade ends go into the HAT's screw terminals, <strong>red to +, black to
+        −</strong>. Loosen the screw, insert the whole metal end, tighten, then tug it to confirm
+        it's gripped. This is the one connection with no undo — check it twice.</li>
+
+      <li><strong>Test it on the bench, before it goes in.</strong> Plug in the panel supply
+        first, then the Pi's. Wait 30 seconds; the sign should start on its own. Finding a bad
+        ribbon now takes a minute. Finding it after the case is closed takes an evening.</li>
+
+      <li><strong>Drill the cord exit — through the bottom rail, not the back.</strong> Power off and
+        unplug. Drill the exit through the frame's <strong>bottom rail</strong>. A cord out the back
+        face sits between the sign and the wall and rocks the case off its 1 mm flush budget — the
+        same budget that rules out a back-face latch — and a ½ in back-board hole won't pass an
+        assembled barrel/USB plug anyway. Size the hole to your cable's connector (or drill it before
+        the connector is attached), fit a rubber grommet, and sand the edge smooth so it can't chafe
+        the insulation.</li>
+
+      <li><strong>Cut the acrylic.</strong> Leave the protective film on. Mark your line, hold a
+        straightedge along it, and drag the scoring tool 6–8 firm passes — you're cutting a
+        groove, not slicing through. Then lay the score over a table edge and press down sharply;
+        it snaps along the line. Ease the cut edge with 220-grit.</li>
+
+      <li><strong>Decide about frosting — with the sign lit.</strong> Power the panels up again
+        and hold the clear acrylic over them. Bare LEDs behind clear acrylic look sharp but the
+        black grid between the pixels reads as a grid, and over a mostly-dark display the sheet
+        acts as a mirror. Frosting hides both, at a little brightness. Compare before committing:
+        frost one of your offcuts and hold the two side by side over the running sign.
+        <br><br>
+        To frost it, either <strong>apply window film</strong> — spray the acrylic with a little
+        soapy water, lay the film on, squeegee from the middle outward, which is reversible if
+        you hate it — or <strong>sand it</strong> with 400-grit wet paper, even circular pressure
+        on one face until the sheen is uniformly matte, which is not. Try the matte face toward
+        the LEDs and away from them; they look noticeably different.</li>
+
+      <li><strong>Seat the back assembly.</strong> Lift the whole back board — panels, Pi, wiring
+        and all — and lower it into the frame from behind, feeding the power leads out through the
+        bottom-rail exit. Fix it with <strong>four countersunk screws, one at each corner</strong>, and a
+        <strong>recessed magnetic catch at the middle of each long side</strong>.
+        <br><br>
+        The split is deliberate. The corner screws are the structure — a sheet pinned at its
+        corners is what stops the frame racking, and it is the reason this build needs no corner
+        braces. The magnets are not structural at all; they just hold the middle of the span flat
+        so the seam closes. Four screws is what you undo to get back in.
+        <br><br>
+        Countersink the screw heads flush and set the magnets into shallow recesses. This goes for
+        <em>every</em> head on the back face, not just these four: the eight M3 panel-mounting and
+        four M2.5 Pi-mounting screws push through from behind too, and a pan head left proud stands
+        ~2 mm — twice the budget — so counterbore each until it sits flush. Nothing may stand proud
+        of the back face — the sign hangs on a wall, and hardware sticking out rocks the case against
+        the plaster. That is also why this is not a latch: a toggle catch or thumbscrew stands about
+        10 mm off the back and would be much nicer to open, but there is 1 mm to play with.</li>
+
+      <li><strong>Fit the face.</strong> Peel the film off the acrylic and screw it to
+        the front of the frame — go gently,
+        acrylic cracks if you overtighten. Power up.</li>
+
+      <li><strong>Hang it, and you're done.</strong> Fit <strong>two keyhole hangers</strong> to the back board, one
+        near each top corner, positioned so their screws land in the frame's top rail — ¾ in of
+        pine to bite into, rather than ¼ in of plywood. The sign weighs about 2.3 kg; keyhole
+        hangers are rated well past that, and the pair spreads the load across two fixings.
+        <br><br>
+        Mark both wall screws off the hangers at once, using a level. Into a stud if you can find
+        one; into drywall anchors rated 10 kg or better if you cannot. Then hook it on and check
+        it sits flat — if it rocks, something on the back is proud and wants countersinking
+        further.</li>
+    </ol>
+    </div>
+
+    <div class="callout">
+      <strong>Never done this before? Two things worth knowing.</strong> Wood glue is stronger
+      than the wood itself — the screws are really there to clamp the joint while it dries, so
+      don't rely on screws alone and skip the glue. And nothing here is time-critical except
+      glue-up: once glue is on a joint you have about ten minutes, so read a step through before
+      starting it rather than halfway.
+    </div>
+  </section>
+
+  <section>
+    <h2>After the jumpers <span class="sheetno">Sheet 6 — commissioning</span></h2>
+    <p>The shipped <code>config.yaml</code> already carries the tuned, post-jumper values (the
+      <em>After</em> column) — so a fresh sign runs at full resolution once the jumpers are on. If
+      you flash <em>before</em> soldering them, set the <em>Before</em> column until you do; then flip
+      these lines back over SSH in under a minute.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Setting</th><th class="num">Before jumper</th><th class="num">After (shipped)</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>rows</td><td class="num">32</td><td class="num">64</td><td>Address-E line reaches all 64 rows — no more dark bands</td></tr>
+          <tr><td>hardware_mapping</td><td class="num">adafruit-hat</td><td class="num">adafruit-hat-pwm</td><td>Pulse timing moves from a software loop to hardware PWM</td></tr>
+          <tr><td>pwm_bits</td><td class="num">8</td><td class="num">11 (default)</td><td>Hardware PWM buys back the refresh headroom, so take the color depth (left unset in config = library default 11)</td></tr>
+          <tr><td>gpio_slowdown</td><td class="num">1</td><td class="num">4</td><td>config ships 4 (suits a Pi 4); a Pi 3B+ wants 1–2 — retune by eye</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Holes &amp; heat <span class="sheetno">Sheet 7 — drilling and thermal</span></h2>
+    <p>The prose above says "a bit just big enough for an M3 to pass" in a few places; here are the
+      actual sizes, so a hole is a clearance hole and not an interference fit. Drill the plywood and
+      acrylic on a backer board to stop breakout.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Where</th><th class="num">Drill</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>M3 clearance (panel screws through plywood)</td><td class="num">3.4 mm</td><td>close fit is 3.2; 3.4 slides</td></tr>
+          <tr><td>M2.5 clearance (Pi screws through plywood)</td><td class="num">2.9 mm</td><td>—</td></tr>
+          <tr><td>Countersink for M3/M2.5 heads (back face)</td><td class="num">~6 mm × 90°</td><td>deep enough to sit flush — nothing proud of the back</td></tr>
+          <tr><td>Acrylic face, 4 corner screws</td><td class="num">M-size + 0.5 mm</td><td><strong>oversize on purpose:</strong> acrylic moves ~0.6 mm over the 425 mm span across a 20 °C swing (CTE ≈ 70 µε/K). A tight hole in cast acrylic star-cracks — leave clearance, don't overtighten, no washer teeth.</td></tr>
+          <tr><td>Cord exit (bottom rail)</td><td class="num">to the connector</td><td>drill for the actual plug, or before the plug is fitted; grommet it</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p><strong>Heat.</strong> Two 64×64 panels at full white plus the Pi is on the order of tens of
+      watts in a sealed ~2.4 L wooden box, with the acrylic (service temp ~70 °C) as the front wall.
+      dizzyos ships <code>brightness: 70</code>, which keeps it well inside that — the design's thermal
+      position is "capped brightness, no vents." If you push brightness toward 100, or run mostly-white
+      content for long stretches, measure the internal rise before you trust it; if it climbs, add a
+      row of small vents low on one stile and high on the other for a convection path. Don't seal a
+      100 %-brightness sign and walk away.</p>
+  </section>
+
+</div>
+
+<script>
+  // Remember ticked items across a closed tab — a shopping list is useless if it
+  // resets on the walk between aisles. Storage may be unavailable; never let that
+  // break the page.
+  (function () {
+    var KEY = "dizzyos-buylist";
+    var boxes = Array.prototype.slice.call(document.querySelectorAll(".item input"));
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { saved = {}; }
+    // Each row is a <label>, so a tap anywhere in it toggles the box — including
+    // on the store link. Keep the link's clicks to itself.
+    Array.prototype.forEach.call(document.querySelectorAll(".item a"), function (link) {
+      link.addEventListener("click", function (ev) { ev.stopPropagation(); });
+    });
+    // ---- 3D assembly model -------------------------------------------------
+    // Dimensions in millimetres, matching cad/params.py exactly. Origin is the
+    // centre of the case; +z runs toward the viewer, so the acrylic face sits at
+    // positive z and the back board at negative.
+    (function () {
+      var steps = document.querySelectorAll(".steps li");
+      var stage = document.getElementById("stage3d");
+      var scene = document.getElementById("scene");
+      var svg = document.getElementById("asm");
+      if (!steps.length || !stage || !scene) { return; }
+
+      var reduced = window.matchMedia
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!("IntersectionObserver" in window)) {
+        document.querySelector(".steps").classList.add("static");
+        return;                       // SVG fallback stays; never a blank figure
+      }
+
+      var W = 425.45, H = 234.95, D = 63.5;  // outer width, height, cavity depth
+      var T = 19.05;                        // 1x3 stock thickness
+      var OPEN_H = H - 2 * T;               // opening height (stile length)
+      var PANEL = 192, PANEL_D = 15;        // one LED panel
+      var BACK = 6.35, ACRYLIC = 2.36, STANDOFF = 44.45;  // stock stack, not D - PANEL_D
+
+      var zFront = D / 2;                   // inside face of the frame, front
+      var zBack = -D / 2;
+
+      // g   — the stage this part first appears.
+      // gi  — the stage it moves into its final place (defaults to g).
+      // sx/sy/sz — where it waits in between.
+      // mid — [stage, dx, dy, dz], one intermediate pose. The frame pieces need
+      //       it because they are cut loose, then dry-fitted close, then glued:
+      //       three distinct positions, not two.
+      //
+      // The back-board parts are built up behind the case, exactly as you build
+      // them on the bench, and that whole assembly seats in one move at 14.
+      var STAGED = -195;      // how far behind the case the sub-assembly waits
+      // Panels sit STANDOFF forward of the back board, which puts their faces
+      // `panel_recess` short of the acrylic rather than flush with the frame.
+      var zPanel = zBack + STANDOFF + PANEL_D / 2;
+      // Named depths, shared by each part and the label that points at it. When
+      // these were written out twice the labels drifted off their parts.
+      var zBoard = zBack - BACK / 2;
+      var zSpacer = zBack + STANDOFF / 2;
+      var zGlass = zFront + ACRYLIC / 2;
+      var zHang = zBack - BACK - 0.8;
+      var zHat = -2.2, zPi = -20.4, zRiser = -16.5, zRib = 8;
+      var PARTS = [
+        // 1-4 — the four cut pieces: loose, then dry-fitted, then two corners
+        { k: "frame", cls: "wood", w: W, h: T, d: D, x: 0, y: (H - T) / 2, z: 0,
+          g: 1, gi: 3, sy: 105, mid: [2, 0, 22, 0] },
+        { k: "frame", cls: "wood", w: T, h: OPEN_H, d: D, x: -(W - T) / 2, y: 0, z: 0,
+          g: 1, gi: 3, sx: -135, mid: [2, -30, 0, 0] },
+        { k: "frame", cls: "wood", w: T, h: OPEN_H, d: D, x: (W - T) / 2, y: 0, z: 0,
+          g: 1, gi: 4, sx: 135, mid: [2, 30, 0, 0] },
+        { k: "frame", cls: "wood", w: W, h: T, d: D, x: 0, y: -(H - T) / 2, z: 0,
+          g: 1, gi: 4, sy: -105, mid: [2, 0, -22, 0] },
+        // 5 — the HAT, soldered loose on the bench before anything is mounted.
+        // It joins the sub-assembly at 11 while that is still parked behind the
+        // case (hence the mid pose also carrying STAGED), and only travels in
+        // with everything else at 14. Seating it at 11 would fly it into an
+        // empty frame while the Pi it bolts to is still 195 mm behind.
+        { k: "hat", cls: "hat", w: 65, h: 56, d: 13.6, x: 40, y: 0, z: zHat,
+          g: 5, gi: 14, sx: -150, sy: -105, sz: STAGED,
+          mid: [11, 0, 0, STAGED] },
+        // the 2x20 stacking header the HAT sits on — the reason it clears the
+        // Pi's port cans at all
+        { k: "riser", cls: "ribbon", w: 51, h: 5, d: 15, x: 40, y: 25, z: zRiser,
+          g: 11, gi: 14, sz: STAGED },
+        // 6-10 — the back board assembly, built up behind the case
+        { k: "backBoard", cls: "wood", w: W, h: H, d: BACK, x: 0, y: 0, z: zBoard,
+          g: 6, gi: 14, sz: STAGED },
+
+        { k: "panels", cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: -PANEL / 2, y: 0, z: zPanel, g: 8, gi: 14, sz: STAGED },
+        { k: "panels", cls: "panel", w: PANEL, h: PANEL, d: PANEL_D, x: PANEL / 2, y: 0, z: zPanel, g: 9, gi: 14, sz: STAGED },
+        { k: "pi", cls: "pcb", w: 85, h: 56, d: 10, x: 40, y: 0, z: zPi, g: 10, gi: 14, sz: STAGED },
+        // 11 — ribbon cables, HAT to panel and panel to panel
+        { k: "ribbons", cls: "ribbon", w: 46, h: 13, d: 1.8, x: -40, y: 26, z: zRib, g: 11, gi: 14, sz: STAGED },
+        { k: "ribbons", cls: "ribbon", w: 30, h: 13, d: 1.8, x: 0, y: -42, z: zRib, g: 11, gi: 14, sz: STAGED },
+        // 12 — power leads, out through the hole low in the back board
+        { k: "power", cls: "ribbon", w: 11, h: 11, d: 34, x: -150, y: -96, z: zBack - BACK - 17,
+          g: 12, gi: 14, sz: STAGED },
+        // 13 — the face, cut and then fitted at 15
+        { k: "face", cls: "glass", w: W, h: H, d: ACRYLIC, x: 0, y: 0, z: zGlass,
+          g: 13, gi: 15, sz: 210 },
+        // 16 — the keyhole hangers, on the outside of the back board
+        { k: "hangers", cls: "steel", w: 38, h: 16, d: 1.6, x: -130, y: (H - T) / 2,
+          z: zHang, g: 16, sz: -120 },
+        { k: "hangers", cls: "steel", w: 38, h: 16, d: 1.6, x: 130, y: (H - T) / 2,
+          z: zHang, g: 16, sz: -120 }
+      ];
+
+      // Every fastener the build uses, declared as counts and then generated —
+      // so the drawing cannot quietly show four spacers where the design needs
+      // eight, which is exactly what it did before. Two links to keep honest:
+      // `test_fit.py` checks these counts against cad/params.py, and the tally
+      // at the end of this block checks the generators against these counts.
+      var COUNTS = {
+        frameScrews: 8,     // 2 per corner, through the rails into the stiles
+        panelSpacers: 8,    // 4 mounting holes x 2 panels
+        panelScrews: 8,     // one M3 x 55 up through each spacer stack
+        piSpacers: 4,
+        piScrews: 4,
+        piNuts: 4,
+        backScrews: 4,      // the corners: the shear path
+        backMagnets: 2,
+        faceScrews: 4,
+        hangers: 2,
+        hangerScrews: 4,    // 2 per hanger
+        magnetScrews: 4     // 2 per catch
+      };
+
+      // Screw heads are drawn a few times over size. At true scale an M3 head
+      // is under 6 mm on a 425 mm case — honest, and invisible.
+      var HEAD = 7, HEAD_D = 3.5;
+      var HOLE_IN = 10;                       // hole inset from a panel edge
+      var hx = PANEL / 2 - HOLE_IN;
+      var zHead = zBack - BACK - HEAD_D / 2;  // heads sit behind the back board
+
+      function add(p) { PARTS.push(p); }
+
+      // panel spacers and their screws, per panel so each arrives with its own
+      [-PANEL / 2, PANEL / 2].forEach(function (cx, pi) {
+        [-hx, hx].forEach(function (dx) {
+          [-hx, hx].forEach(function (dy) {
+            add({ k: "panelSpacers", cls: "stand", w: 9, h: 9, d: STANDOFF,
+                  x: cx + dx, y: dy, z: zSpacer,
+                  g: 7, gi: 14, sz: STAGED });
+            add({ k: "panelScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
+                  x: cx + dx, y: dy, z: zHead,
+                  g: pi === 0 ? 8 : 9, gi: 14, sz: STAGED });
+          });
+        });
+      });
+
+      // the Pi's own sandwich: spacer, screw behind, nut in front of the board
+      [[-29, -24.5], [-29, 24.5], [29, -24.5], [29, 24.5]].forEach(function (o) {
+        var px = 40 + o[0], py = o[1];
+        add({ k: "piSpacers", cls: "stand", w: 6, h: 6, d: 6.35, x: px, y: py,
+              z: zBack + 6.35 / 2, g: 10, gi: 14, sz: STAGED });
+        add({ k: "piScrews", cls: "screw", w: 5, h: 5, d: HEAD_D, x: px, y: py,
+              z: zHead, g: 10, gi: 14, sz: STAGED });
+        add({ k: "piNuts", cls: "screw", w: 5, h: 5, d: 2.4, x: px, y: py,
+              z: -16.2, g: 10, gi: 14, sz: STAGED });
+      });
+
+      // frame corner screws, in the outer faces of the rails near each end. The
+      // two at the top left arrive at 3 with the first corner; the rest at 4.
+      [(H - T) / 2 + T / 2, -((H - T) / 2 + T / 2)].forEach(function (ry) {
+        [-1, 1].forEach(function (side) {
+          [14, 40].forEach(function (inset) {
+            add({ k: "frameScrews", cls: "screw", w: HEAD, h: HEAD_D, d: HEAD,
+                  x: side * (W / 2 - inset),
+                  y: ry - (ry > 0 ? 1 : -1) * HEAD_D / 2, z: 0,
+                  g: (ry > 0 && side === -1) ? 3 : 4,
+                  sy: (ry > 0 ? 1 : -1) * 70 });
+          });
+        });
+      });
+
+      // back board: screws at the corners, magnets mid-span on the long sides
+      [-1, 1].forEach(function (sx) {
+        [-1, 1].forEach(function (sy) {
+          add({ k: "backScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
+                x: sx * (W / 2 - 12), y: sy * (H / 2 - 11), z: zHead,
+                g: 14, sz: -110 });
+        });
+      });
+      [-1, 1].forEach(function (sy) {
+        add({ k: "backMagnets", cls: "steel", w: 20, h: 9, d: 4, x: 0,
+              y: sy * (H / 2 - 10), z: zBack - 2, g: 14, sz: -110 });
+      });
+
+      // face screws, into the front of the frame at the corners
+      [-1, 1].forEach(function (sx) {
+        [-1, 1].forEach(function (sy) {
+          add({ k: "faceScrews", cls: "screw", w: HEAD, h: HEAD, d: HEAD_D,
+                x: sx * (W / 2 - 12), y: sy * (H / 2 - 11),
+                z: zFront + ACRYLIC + HEAD_D / 2, g: 15, sz: 150 });
+        });
+      });
+
+      // the small screws through each hanger, and through each magnetic catch
+      [-130, 130].forEach(function (cx) {
+        [-12, 12].forEach(function (dx) {
+          add({ k: "hangerScrews", cls: "screw", w: 5, h: 5, d: 2.6,
+                x: cx + dx, y: (H - T) / 2 - 26, z: zBack - BACK - 2.2,
+                g: 16, sz: -120 });
+        });
+      });
+      [-1, 1].forEach(function (sy) {
+        [-13, 13].forEach(function (dx) {
+          add({ k: "magnetScrews", cls: "screw", w: 5, h: 5, d: 3,
+                x: dx, y: sy * (H / 2 - 10), z: zBack - 2.4,
+                g: 14, sz: -110 });
+        });
+      });
+
+      // Did the generators above actually produce what COUNTS promises? A
+      // mismatch is silent otherwise — the drawing just shows the wrong number
+      // of parts, which is the bug this whole block exists to prevent.
+      Object.keys(COUNTS).forEach(function (k) {
+        var n = PARTS.filter(function (p) { return p.k === k; }).length;
+        if (n !== COUNTS[k]) {
+          console.error("[build-sheet] " + k + ": drew " + n +
+                        ", COUNTS says " + COUNTS[k]);
+        }
+      });
+
+      // One label per thing worth naming, anchored just outside the case so it
+      // does not sit on top of the geometry. y is up, as everywhere in this
+      // table. Each appears with the stage that introduces its part.
+      var LX = W / 2 + 145, LY = H / 2 + 92;
+      // `to` is where the leader ends: the near edge of the part being named.
+      // `z` is that part's own depth, taken from the same variable the part uses.
+      // `for` names the part so it can be lit while its label is the live one —
+      // five of these point at things sitting behind the panels, where a dot
+      // alone reads as being on the panel rather than behind it.
+      var LABELS = [
+        { t: "1×3 frame", for: "frame",
+          x: -LX, y: 72,  z: 0,       g: 1,  to: -(W / 2 - T) },
+        { t: "ribbon cables", for: "ribbons",
+          x: -LX, y: 26,  z: zRib,    g: 11, to: -63 },
+        { t: "1¾ in spacers ×8", for: "panelSpacers",
+          x: -LX, y: -86, z: zSpacer, g: 7,  to: -(PANEL / 2 + hx) - 4.5 },
+        { t: "¼ in plywood back", for: "backBoard",
+          x: LX,  y: 72,  z: zBoard,  g: 6,  to: W / 2 },
+        { t: "matrix HAT", for: "hat",
+          x: LX,  y: 26,  z: zHat,    g: 5,  to: 72.5 },
+        { t: "Raspberry Pi", for: "pi",
+          x: LX,  y: -26, z: zPi,     g: 10, to: 82.5 },
+        { t: "acrylic face", for: "face",
+          x: -95, y: LY,  z: zGlass,  g: 13, to: H / 2 },
+        { t: "keyhole hangers", for: "hangers",
+          x: 130, y: LY,  z: zHang,   g: 16, to: (H - T) / 2 },
+        { t: "64×64 panels ×2", for: "panels",
+          x: 0,   y: -LY, z: zPanel,  g: 8,  to: -PANEL / 2 }
+      ];
+      // A label anchored on the left or right runs its leader along x; one
+      // anchored above or below runs it along y. Which it is falls out of
+      // whether the anchor sits on the side rail or the top/bottom one.
+      var GAP = 6;              // clear of the label's own border
+      var leadEls = LABELS.map(function (L) {
+        var el = document.createElement("div");
+        el.className = "lead3d";
+        var sideways = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        if (sideways) {
+          var from = L.x - Math.sign(L.x) * GAP;
+          el.style.width = Math.max(0, Math.abs(L.to - from)) + "px";
+          el.style.height = "1px";
+          el.style.setProperty("--lx", ((from + L.to) / 2) + "px");
+          el.style.setProperty("--ly", (-L.y) + "px");
+        } else {
+          var fy = L.y - Math.sign(L.y) * GAP;
+          el.style.width = "1px";
+          el.style.height = Math.max(0, Math.abs(L.to - fy)) + "px";
+          el.style.setProperty("--lx", L.x + "px");
+          el.style.setProperty("--ly", (-(fy + L.to) / 2) + "px");
+        }
+        el.style.setProperty("--lz", L.z + "px");
+        scene.appendChild(el);
+        return el;
+      });
+
+      var dotEls = LABELS.map(function (L) {
+        var el = document.createElement("div");
+        el.className = "dot3d";
+        var sideways = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        el.style.setProperty("--lx", (sideways ? L.to : L.x) + "px");
+        el.style.setProperty("--ly", (-(sideways ? L.y : L.to)) + "px");
+        el.style.setProperty("--lz", L.z + "px");
+        scene.appendChild(el);
+        return el;
+      });
+
+      // The wrapper is what moves; the inner element is what faces the reader.
+      var labelEls = LABELS.map(function (L) {
+        var pos = document.createElement("div");
+        pos.className = "lblpos";
+        var el = document.createElement("div");
+        el.className = "lbl3d";
+        el.textContent = L.t;
+        pos.appendChild(el);
+        scene.appendChild(pos);
+        return { pos: pos, txt: el };
+      });
+
+      var FACES = ["front", "back", "right", "left", "top", "bottom"];
+
+      function face(kind, w, h, d) {
+        var el = document.createElement("div");
+        el.className = "face";
+        var fw = w, fh = h, tf = "", left = 0, top = 0;
+        if (kind === "front") { tf = "translateZ(" + d / 2 + "px)"; }
+        else if (kind === "back") { tf = "rotateY(180deg) translateZ(" + d / 2 + "px)"; }
+        else if (kind === "right") { fw = d; left = (w - d) / 2; tf = "rotateY(90deg) translateZ(" + w / 2 + "px)"; }
+        else if (kind === "left") { fw = d; left = (w - d) / 2; tf = "rotateY(-90deg) translateZ(" + w / 2 + "px)"; }
+        else if (kind === "top") { fh = d; top = (h - d) / 2; tf = "rotateX(90deg) translateZ(" + h / 2 + "px)"; }
+        else { fh = d; top = (h - d) / 2; tf = "rotateX(-90deg) translateZ(" + h / 2 + "px)"; }
+        el.style.width = fw + "px";
+        el.style.height = fh + "px";
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+        el.style.transform = tf;
+        return el;
+      }
+
+      var boxes = PARTS.map(function (p) {
+        var box = document.createElement("div");
+        box.className = "box " + p.cls;
+        box.style.width = p.w + "px";
+        box.style.height = p.h + "px";
+        box.style.left = -p.w / 2 + "px";
+        box.style.top = -p.h / 2 + "px";
+        FACES.forEach(function (k) { box.appendChild(face(k, p.w, p.h, p.d)); });
+        scene.appendChild(box);
+        return box;
+      });
+
+      // Which boxes each label names. Resolved once; a label whose `for` matches
+      // nothing yields an empty list, which the fit checks refuse.
+      var litFor = LABELS.map(function (L) {
+        var ids = [];
+        PARTS.forEach(function (p, i) {
+          if ((p.k || p.cls) === L.for) { ids.push(i); }
+        });
+        return ids;
+      });
+
+      // Does each label's dot actually land on the part it names? Three missed
+      // when the targets were written by hand: the spacer label ran at y=-72
+      // against spacers at -86, the Pi label at -72 against a board spanning
+      // ±28, and the hanger label at x=95 against hangers at ±130. Geometry
+      // this fiddly needs checking, not eyeballing.
+      LABELS.forEach(function (L, i) {
+        var side = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        var tx = side ? L.to : L.x, ty = side ? L.y : L.to;
+        if (!litFor[i].length) {
+          console.error("[build-sheet] label '" + L.t + "' names no part: " + L.for);
+          return;
+        }
+        var hit = litFor[i].some(function (bi) {
+          var p = PARTS[bi];
+          return Math.abs(tx - p.x) <= p.w / 2 + 1.5
+              && Math.abs(ty - p.y) <= p.h / 2 + 1.5
+              && Math.abs(L.z - p.z) <= p.d / 2 + 1.5;
+        });
+        if (!hit) {
+          console.error("[build-sheet] label '" + L.t +
+                        "' does not point at its " + L.for +
+                        " — it will also fail to follow that part, since the" +
+                        " part it copies is the one it lands on");
+        }
+      });
+
+      // Where a part is displaced from its final position at a given stage:
+      // nothing once seated, the mid pose if one is declared and reached, else
+      // wherever it waits. Factored out because the labels need the same answer
+      // — a label that ignores this points at where its part will end up, which
+      // is empty space while the part is still parked behind the case.
+      function offsetOf(p, stage) {
+        if (stage >= (p.gi || p.g)) { return [0, 0, 0]; }
+        if (p.mid && stage >= p.mid[0]) {
+          return [p.mid[1], p.mid[2], p.mid[3]];
+        }
+        return [p.sx || 0, p.sy || 0, p.sz || 0];
+      }
+
+      // The part each dot rests on — the same containment test the assertion
+      // below uses. Its displacement is what the label, leader and dot copy, so
+      // an annotation travels with the thing it names instead of waiting at the
+      // place that thing will eventually occupy.
+      var anchorOf = LABELS.map(function (L, i) {
+        var side = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        var tx = side ? L.to : L.x, ty = side ? L.y : L.to;
+        var found = -1;
+        litFor[i].forEach(function (bi) {
+          if (found >= 0) { return; }
+          var p = PARTS[bi];
+          if (Math.abs(tx - p.x) <= p.w / 2 + 1.5
+              && Math.abs(ty - p.y) <= p.h / 2 + 1.5
+              && Math.abs(L.z - p.z) <= p.d / 2 + 1.5) { found = bi; }
+        });
+        return found;
+      });
+
+      // Base positions, in the same CSS space the elements use.
+      var annoBase = LABELS.map(function (L) {
+        var side = Math.abs(Math.abs(L.x) - LX) < 0.5;
+        var from = side ? L.x - Math.sign(L.x) * GAP : L.y - Math.sign(L.y) * GAP;
+        return {
+          lbl: { x: L.x, y: -L.y },
+          lead: side ? { x: (from + L.to) / 2, y: -L.y }
+                     : { x: L.x, y: -(from + L.to) / 2 },
+          dot: side ? { x: L.to, y: -L.y } : { x: L.x, y: -L.to }
+        };
+      });
+
+      function moveAnno(el, base, off) {
+        el.style.setProperty("--lx", (base.x + off[0]) + "px");
+        el.style.setProperty("--ly", (base.y - off[1]) + "px");
+        el.style.setProperty("--lz", off[2] + "px");
+      }
+
+      function place(stage) {
+        PARTS.forEach(function (p, i) {
+          var visible = stage >= p.g;
+          var off = offsetOf(p, stage);
+          var x = p.x + off[0];
+          var y = p.y + off[1];
+          var z = p.z + off[2];
+          // CSS y grows downward; the parts table reads y as up, so the
+          // top rail is y positive. Without this negation the keyhole hangers
+          // render along the bottom edge and the cord exits through the top.
+          boxes[i].style.transform =
+            "translate3d(" + x + "px," + (-y) + "px," + z + "px)";
+          boxes[i].style.opacity = visible ? "1" : "0";
+        });
+        // Light only the part whose label just arrived — lighting every named
+        // part from its stage onward would end with the whole model amber.
+        var lit = {};
+        LABELS.forEach(function (L, i) {
+          if (stage === L.g) {
+            litFor[i].forEach(function (bi) { lit[bi] = true; });
+          }
+        });
+        boxes.forEach(function (b, i) { b.classList.toggle("lit", !!lit[i]); });
+        LABELS.forEach(function (L, i) {
+          var on = stage >= L.g;
+          labelEls[i].txt.classList.toggle("in", on);
+          leadEls[i].classList.toggle("in", on);
+          dotEls[i].classList.toggle("in", on);
+          var anchor = anchorOf[i];
+          var off = anchor >= 0 ? offsetOf(PARTS[anchor], stage) : [0, 0, 0];
+          moveAnno(labelEls[i].pos, annoBase[i].lbl, off);
+          moveAnno(leadEls[i], annoBase[i].lead, off);
+          moveAnno(dotEls[i], annoBase[i].dot, off);
+        });
+      }
+
+      // Fit the model to the stage. Padded generously on both axes now: the
+      // labels sit outside the case, so the thing being fitted is wider and
+      // taller than the case itself, and the stage clips whatever overflows.
+      // Height is checked too — the taller stage made vertical clipping the
+      // binding constraint at narrow widths.
+      var fitScale = 1, zoom = 1;
+      var ZOOM_MIN = 0.6, ZOOM_MAX = 3.5;
+
+      function applyScale() {
+        stage.style.setProperty("--sc", (fitScale * zoom).toFixed(3));
+      }
+
+      // The labels counter-scale, so their screen size is fixed while the model
+      // shrinks — which means the space they need cannot be expressed as a
+      // padding factor on the model. Measure them and solve for the scale that
+      // leaves room: sc * LX + halfLabel <= halfStage. TILT covers a label
+      // swinging outward as the scene rotates about its own depth.
+      var TILT = 1.06;
+      function labelBox() {
+        var w = 0, hh = 0;
+        labelEls.forEach(function (e) {
+          w = Math.max(w, e.txt.offsetWidth);
+          hh = Math.max(hh, e.txt.offsetHeight);
+        });
+        return { w: w, h: hh };
+      }
+      function fit() {
+        var lb = labelBox();
+        var availX = stage.clientWidth / 2 - lb.w / 2 - 6;
+        var availY = stage.clientHeight / 2 - lb.h / 2 - 6;
+        fitScale = Math.max(0.08, Math.min(1,
+                                           availX / (LX * TILT),
+                                           availY / (LY * TILT)));
+        applyScale();
+      }
+
+      function setZoom(z) {
+        zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+        applyScale();
+      }
+
+      stage.hidden = false;
+      document.getElementById("figbar3d").hidden = false;
+      if (svg) { document.getElementById("fallback2d").hidden = true; }
+      fit();
+      window.addEventListener("resize", fit);
+      place(reduced ? 16 : 0);
+      if (reduced) { document.querySelector(".steps").classList.add("static"); }
+
+      // Drag to orbit; two fingers pinch and orbit at once.
+      var rx = -18, ry = -32;
+      function apply() {
+        scene.style.setProperty("--rx", rx + "deg");
+        scene.style.setProperty("--ry", ry + "deg");
+      }
+      apply();
+
+      // Pointer bookkeeping rather than a single lastX/lastY, so a second
+      // finger is a gesture instead of a jump: orbit follows the centroid and
+      // zoom follows the spread between the two. This is the touch path — a
+      // trackpad's two-finger drag arrives as wheel events, handled below.
+      var pts = new Map();
+      function centroid() {
+        var sx = 0, sy = 0;
+        pts.forEach(function (q) { sx += q.x; sy += q.y; });
+        return { x: sx / pts.size, y: sy / pts.size };
+      }
+      function spread() {
+        var a = [];
+        pts.forEach(function (q) { a.push(q); });
+        return a.length < 2 ? 0 : Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+      }
+      var lastC = null, lastS = 0;
+
+      // Both gesture paths orbit through here, but they disagree about sign.
+      // A pointer delta is where the hand went: moving right is +x. A wheel
+      // delta is where the *content* was asked to go, which is the opposite —
+      // two fingers moving right reports negative deltaX. Passing wheel deltas
+      // through raw is what made two-finger drag feel inverted on both axes.
+      //
+      // Kept as named constants because the right answer also depends on the
+      // reader's natural-scroll setting, so this is a sign somebody will want to
+      // flip without reading the rest of the file.
+      var DRAG_DIR = 1;    // click/touch drag: delta already follows the hand
+      var WHEEL_DIR = -1;  // trackpad: invert to follow the fingers
+
+      function orbitBy(dx, dy, dir) {
+        ry += dir * dx * 0.45;
+        rx -= dir * dy * 0.45;
+        rx = Math.max(-85, Math.min(85, rx));
+        apply();
+      }
+
+      stage.addEventListener("pointerdown", function (e) {
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        lastC = centroid();
+        lastS = spread();
+        scene.style.transition = "none";
+        stage.setPointerCapture(e.pointerId);
+      });
+      stage.addEventListener("pointermove", function (e) {
+        if (!pts.has(e.pointerId)) { return; }
+        pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        var c = centroid(), s = spread();
+        if (lastC) { orbitBy(c.x - lastC.x, c.y - lastC.y, DRAG_DIR); }
+        if (pts.size > 1 && lastS > 8 && s > 8) { setZoom(zoom * (s / lastS)); }
+        lastC = c;
+        lastS = s;
+      });
+      ["pointerup", "pointercancel"].forEach(function (ev) {
+        stage.addEventListener(ev, function (e) {
+          pts.delete(e.pointerId);
+          // Re-seat the reference from the fingers still down, or lifting one of
+          // two would read as a large jump of the centroid.
+          lastC = pts.size ? centroid() : null;
+          lastS = spread();
+          if (!pts.size) { scene.style.transition = ""; }
+        });
+      });
+
+      // Trackpad. Two-finger drag orbits on both axes and pinch zooms, which
+      // means this figure keeps the scroll gesture instead of passing it on:
+      // with the pointer over the model the page will not scroll, so advancing
+      // the build is done with the pointer over the steps.
+      stage.addEventListener("wheel", function (e) {
+        e.preventDefault();
+        if (e.ctrlKey) {                      // browsers deliver pinch this way
+          setZoom(zoom * Math.pow(1.0075, -e.deltaY));
+        } else {
+          orbitBy(e.deltaX * 0.32, e.deltaY * 0.32, WHEEL_DIR);
+        }
+      }, { passive: false });
+
+      document.getElementById("reset3d").addEventListener("click", function () {
+        rx = -18; ry = -32; setZoom(1); apply();
+      });
+
+      // Keyboard, so the model is not drag-only: arrows orbit, +/- zoom, 0
+      // resets. The stage takes focus for this, and shows a ring when it has it.
+      stage.tabIndex = 0;
+      stage.setAttribute("role", "application");
+      stage.setAttribute("aria-label",
+        "Assembly model — arrow keys rotate, plus and minus zoom, 0 resets");
+      stage.addEventListener("keydown", function (e) {
+        var step = e.shiftKey ? 15 : 5;
+        if (e.key === "ArrowLeft") { ry -= step; }
+        else if (e.key === "ArrowRight") { ry += step; }
+        else if (e.key === "ArrowUp") { rx -= step; }
+        else if (e.key === "ArrowDown") { rx += step; }
+        else if (e.key === "+" || e.key === "=") { setZoom(zoom * 1.15); }
+        else if (e.key === "-" || e.key === "_") { setZoom(zoom / 1.15); }
+        else if (e.key === "0") { rx = -18; ry = -32; setZoom(1); }
+        else { return; }
+        e.preventDefault();
+        rx = Math.max(-85, Math.min(85, rx));
+        apply();
+      });
+
+      if (reduced) { return; }
+
+      // Scroll drives the build. The active step is whichever one's midpoint sits
+      // closest to the focus line — measured rather than triggered, so with
+      // several steps on screen the highlighted one is always the one on the
+      // line, and scrolling back up takes the case apart again.
+      // Where on screen a step counts as "the one you are reading". Side by
+      // side, that is a quarter down — the graphic leads the text slightly,
+      // which reads better than trailing it. Stacked, the model is sticky
+      // across the top of the screen, so a quarter down is *behind* it and the
+      // active step would be one you cannot see; there the line has to sit
+      // below the model instead. Hence measured, not hardcoded.
+      var FOCUS_WIDE = 0.25;
+      var wide = window.matchMedia("(min-width: 68rem)");
+
+      function focusLine() {
+        var vh = window.innerHeight;
+        if (wide.matches) { return vh * FOCUS_WIDE; }
+        var below = stage.getBoundingClientRect().bottom + 48;
+        return Math.min(Math.max(below, vh * 0.3), vh * 0.8);
+      }
+
+      // Which model stage each step leaves you at. Several steps share a stage
+      // — sanding and painting change nothing you can see in a wireframe — and
+      // that is fine; the model holds while the instructions carry on.
+      // One entry per step, in order — `test_fit.py` asserts the lengths match,
+      // because adding a step silently shifts every stage after it and the
+      // model then illustrates the wrong instruction.
+      var GROUP_BY_STEP = [
+        1, 1,                 // 1-2   the four pieces, cut and laid out loose
+        2, 2, 2, 2, 2,        // 3-7   dry-fitted close: square, sand, mark, drill
+        3, 3,                 // 8-9   glue and screw the first corner
+        4, 4, 4, 4,           // 10-13 the other three, keep it bare, square, paint
+        5,                    // 14    the HAT, soldered loose on the bench
+        6,                    // 15    back board
+        7,                    // 16    spacers
+        8,                    // 17    panel 1
+        9,                    // 18    panel 2 — butted tight against it
+        10,                   // 19    the Pi
+        11,                   // 20    HAT onto the Pi, ribbons across
+        12, 12, 12,           // 21-23 power, bench test, cord hole
+        13, 13,               // 24-25 cut the acrylic, decide about frosting
+        14,                   // 26    the whole assembly seats into the frame
+        15,                   // 27    face on
+        16                    // 28    on the wall
+      ];
+      var list = steps[0].parentNode;
+      var current = -1;
+      var queued = false;
+
+      function update() {
+        queued = false;
+        var line = focusLine();
+        var box = list.getBoundingClientRect();
+
+        // Pin both ends rather than trusting nearest-to-line to reach them.
+        // Nothing has started until the list reaches the line; and the build is
+        // finished once the list has passed it — or once the page has simply run
+        // out of scroll, which is the case that would otherwise leave the last
+        // step permanently unreachable on a tall window.
+        var atPageEnd = window.innerHeight + window.scrollY
+          >= document.documentElement.scrollHeight - 8;
+        if (box.top >= line) { setActive(-1, 0); return; }
+        if (box.bottom <= line || atPageEnd) {
+          setActive(steps.length - 1, 3);
+          return;
+        }
+
+        var best = 0, bestDist = Infinity;
+        for (var i = 0; i < steps.length; i++) {
+          var r = steps[i].getBoundingClientRect();
+          var dist = Math.abs(r.top + r.height / 2 - line);
+          if (dist < bestDist) { bestDist = dist; best = i; }
+        }
+        setActive(best, GROUP_BY_STEP[best]);
+      }
+
+      function setActive(idx, group) {
+        if (idx === current) { return; }
+        current = idx;
+        place(group);
+        Array.prototype.forEach.call(steps, function (s, i) {
+          s.classList.toggle("active", i === idx);
+        });
+      }
+
+      function onScroll() {
+        if (queued) { return; }
+        queued = true;
+        window.requestAnimationFrame(update);
+      }
+
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll);
+      update();
+    })();
+
+    boxes.forEach(function (box, i) {
+      if (saved[i]) { box.checked = true; }
+      box.addEventListener("change", function () {
+        saved[i] = box.checked;
+        try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) { /* private mode */ }
+      });
+    });
+  })();
+</script>

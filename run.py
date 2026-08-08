@@ -12,6 +12,7 @@ display, so you can eyeball the output (or diff it) before wiring up hardware.
 import argparse
 import os
 import sys
+import threading
 
 import yaml
 
@@ -24,9 +25,99 @@ from kernel.services import Services
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
-def load_config(path):
+def _read_yaml(path):
     with open(path, "r", encoding="utf-8") as handle:
-        return yaml.safe_load(handle)
+        return yaml.safe_load(handle) or {}
+
+
+def _deep_merge(base, over):
+    """Recursively merge `over` onto `base` (over wins). Dicts merge key by key;
+    everything else — including lists like launcher.rotation — is replaced."""
+    if not (isinstance(base, dict) and isinstance(over, dict)):
+        return over
+    out = dict(base)
+    for key, val in over.items():
+        out[key] = _deep_merge(base.get(key), val) if key in base else val
+    return out
+
+
+def load_config(path):
+    """Load the user config merged over the release's default config.yaml, so a
+    new release's added keys always resolve to a value even against an older
+    user file (user config survives updates but must stay forward-compatible).
+    In dev, `path` IS the repo's config.yaml, so there's nothing to merge over."""
+    user = _read_yaml(path)
+    defaults_path = os.path.join(ROOT, "config.yaml")
+    if (os.path.exists(defaults_path)
+            and os.path.abspath(defaults_path) != os.path.abspath(path)):
+        return _deep_merge(_read_yaml(defaults_path), user)
+    return user
+
+
+def running_version(default):
+    """The tag the sign is actually on — the current-symlink target on the Pi,
+    accurate for tag / main / pin modes — falling back to the compiled-in
+    __version__ (which reads 0.0.0 until the first release is cut)."""
+    link = "/opt/dizzyos/current"
+    try:
+        if os.path.islink(link):
+            return os.path.basename(os.readlink(link))
+    except OSError:
+        pass
+    return default
+
+
+def validate_config(cfg):
+    """Return None if `cfg` is safe to boot, else a human-readable reason.
+
+    Walks the same paths run.py uses — canvas sizing and rotation app lookup —
+    so the LAN settings page (which injects this as its validator) cannot save a
+    config that would crash the launcher and, with `Restart=always`, spin the
+    sign in a restart loop with no way back in.
+    """
+    if not isinstance(cfg, dict) or "matrix" not in cfg:
+        return "this doesn't look like a dizzyos config"
+    m = cfg["matrix"]
+    if not isinstance(m, dict):
+        return "matrix: must be a mapping"
+    for key in ("rows", "cols"):
+        if not isinstance(m.get(key), int) or m[key] <= 0:
+            return f"matrix.{key} must be a positive integer"
+    for key in ("chain", "parallel"):
+        if key in m and (not isinstance(m[key], int) or m[key] <= 0):
+            return f"matrix.{key} must be a positive integer"
+    try:
+        display_mod.canvas_size(cfg)
+    except (KeyError, TypeError) as exc:
+        return f"matrix block is invalid ({exc})"
+    rotation = (cfg.get("launcher") or {}).get("rotation", [])
+    if not isinstance(rotation, list) or not rotation:
+        return "launcher.rotation must list at least one app"
+    for name in rotation:
+        if not os.path.isfile(os.path.join(APPS_DIR, str(name), "app.py")):
+            return (f"launcher.rotation names unknown app '{name}' "
+                    f"(have: {', '.join(available_apps()) or 'none'})")
+    return None
+
+
+def load_config_with_fallback(path, log, validate=True):
+    """Load config, falling back to the `.prev` copy the settings page keeps if
+    the primary file is missing/corrupt/unbootable. A power cut mid-save, or a
+    hand-edit that doesn't boot, then costs a reboot to the last good config
+    rather than a re-flash."""
+    try:
+        cfg = load_config(path)
+        if validate:
+            reason = validate_config(cfg)
+            if reason:
+                raise ValueError(reason)
+        return cfg
+    except Exception as exc:  # noqa: BLE001 - any load/parse/validate failure
+        prev = path + ".prev"
+        if os.path.exists(prev):
+            log(f"config: {path} unusable ({exc}); falling back to {prev}")
+            return load_config(prev)
+        raise
 
 
 def apply_overrides(cfg, args):
@@ -45,9 +136,9 @@ def apply_overrides(cfg, args):
         m["pixel_mapper_config"] = args.led_pixel_mapper
 
 
-def build_services(cfg, log):
+def build_services(cfg, log, fonts=None):
     width, height = display_mod.canvas_size(cfg)
-    fonts = FontBook(os.path.join(ROOT, "fonts"))
+    fonts = fonts or FontBook(os.path.join(ROOT, "fonts"))
     return Services(width=width, height=height, data=DataService(log=log), fonts=fonts, log=log)
 
 
@@ -80,6 +171,23 @@ def selected_names(cfg, args):
 def select_apps(cfg, args):
     """Load the apps to run live: a single `--app`, or the full rotation."""
     return [load_named_app(cfg, name) for name in selected_names(cfg, args)]
+
+
+def select_apps_safe(cfg, args, log):
+    """Like select_apps, but a bad/missing app is logged and skipped rather than
+    calling sys.exit — the live launcher must not die (and restart-loop) over one
+    typo'd rotation entry. Returns whatever loaded; the launcher renders its own
+    fallback frame if that's nothing, keeping the settings page reachable."""
+    apps = []
+    for name in selected_names(cfg, args):
+        if not os.path.isfile(os.path.join(APPS_DIR, name, "app.py")):
+            log(f"launcher: skipping unknown app '{name}'")
+            continue
+        try:
+            apps.append(load_app(name, cfg.get("apps", {}).get(name, {})))
+        except Exception as exc:  # noqa: BLE001 - one app's failure isn't fatal
+            log(f"launcher: failed to load '{name}': {exc}")
+    return apps
 
 
 def dump_frames(cfg, args, log):
@@ -123,25 +231,67 @@ def main():
     parser.add_argument("--menu-url", help="override the cafe_menu feed URL/path")
     args = parser.parse_args()
 
-    cfg = load_config(args.config)
+    def log(message):
+        print(message, file=sys.stderr)
+
+    # A live boot validates and can fall back to the last-good `.prev` config; a
+    # single-app dev preview (--app) skips that so a throwaway config still runs.
+    cfg = load_config_with_fallback(args.config, log, validate=not args.app)
     apply_overrides(cfg, args)
     if args.menu_url:  # applies to both the live launcher and --dump-frames
         cfg.setdefault("apps", {}).setdefault("cafe_menu", {})["menu_url"] = args.menu_url
-
-    def log(message):
-        print(message, file=sys.stderr)
 
     if args.dump_frames:
         dump_frames(cfg, args, log)
         return
 
+    from kernel import __version__
     from kernel.launcher import Launcher  # deferred: pulls in the matrix library
+    from kernel.netmon import NetworkMonitor
+    from kernel.overlay import OverlayManager, no_wifi_icon
+    from kernel.settings import SettingsServer
 
-    apps = select_apps(cfg, args)  # validate/load apps before spinning up the matrix
-    matrix = display_mod.create_matrix(cfg)
+    # System layer first — before the matrix and apps. The status overlays and
+    # the PIN-gated LAN settings page must come up even if the display or an app
+    # fails to build, so a bad config is always recoverable over the network
+    # rather than by pulling the SD card. Each is opt-out via `system:` in config.
+    fonts = FontBook(os.path.join(ROOT, "fonts"))
+    overlays = OverlayManager()
+    system = cfg.get("system") or {}
+    netmon = None
+    if system.get("network_monitor", True):
+        # The monitor publishes state; wiring it to the glyph is done here so the
+        # sensor stays decoupled and apps can read services.net.online too.
+        def on_net_change(online):
+            if online:
+                overlays.hide("no_wifi")
+            else:
+                overlays.show("no_wifi", no_wifi_icon)
+        netmon = NetworkMonitor(log, on_change=on_net_change).start()
+    settings_cfg = system.get("settings") or {}
+    if settings_cfg.get("enabled", True):
+        try:
+            SettingsServer(args.config, overlays, fonts, log,
+                           version=running_version(__version__),
+                           port=settings_cfg.get("port", 8080),
+                           validate=validate_config).start()
+        except OSError as exc:  # port taken (e.g. second dev instance) — not fatal
+            log(f"settings: disabled ({exc})")
+
+    try:
+        matrix = display_mod.create_matrix(cfg)
+    except Exception as exc:  # noqa: BLE001 - hold, don't exit into a restart loop
+        log(f"display: could not build the matrix ({exc}); holding with the "
+            "settings page up so the config can be fixed over the network")
+        threading.Event().wait()
+        return
+
+    services = build_services(cfg, log, fonts=fonts)
+    services.net = netmon  # apps can read services.net.online (None if disabled)
+    apps = select_apps_safe(cfg, args, log)
     log(f"dizzyos up: {display_mod.canvas_size(cfg)} canvas, apps={[a.name for a in apps]}")
     try:
-        Launcher(matrix, apps, cfg, build_services(cfg, log)).run()
+        Launcher(matrix, apps, cfg, services, overlays=overlays).run()
     except KeyboardInterrupt:
         log("shutting down")
 

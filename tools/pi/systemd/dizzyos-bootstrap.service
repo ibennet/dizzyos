@@ -1,0 +1,15 @@
+# One-shot platform install on the first networked boot (enabled by
+# firstrun.sh, disables itself when done). See tools/pi/bootstrap.sh.
+
+[Unit]
+Description=dizzyos platform bootstrap
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/dizzyos/payload/bootstrap.sh
+TimeoutStartSec=45min
+
+[Install]
+WantedBy=multi-user.target

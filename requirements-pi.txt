@@ -1,0 +1,10 @@
+# Pi runtime dependencies (the matrix driver is compiled on-device by
+# tools/pi/bootstrap.sh; the emulator in requirements.txt is dev-only).
+#
+# Pinned exactly, on purpose: the venv is shared across releases and a rollback
+# reinstalls the previous release's pins, so a nightly update must not silently
+# float a dependency onto the appliance. Pillow in particular is an ABI pin —
+# the compiled rgbmatrix shim is built against its Imaging.h in bootstrap.sh, so
+# keep PILLOW there in sync with this line when bumping.
+Pillow==10.4.0
+PyYAML==6.0.2

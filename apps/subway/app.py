@@ -94,15 +94,57 @@ ROW_GAP = 2       # vertical gap between the two trains in a direction block
 ROW_H = BULLET + ROW_GAP
 BLOCK_H = 2 * ROW_H - ROW_GAP  # a direction block is two train rows tall
 HEADER_Y = 0
-# Top row of each direction block; the second train sits ROW_H below.
-BLOCK_Y = {"S": 10, "N": 37}
-# The body area the two blocks span, for centering column-wide messages in.
-BODY_TOP = BLOCK_Y["S"]
-BODY_H = BLOCK_Y["N"] + BLOCK_H - BODY_TOP
-# Band boundaries as first/last row, deliberately adjacent: the three bands tile the
-# full canvas with no black seam between them, and the last runs to the bottom edge.
-HEADER_ROWS = (0, 7)
-BAND_ROWS = {"S": (8, 34), "N": (35, None)}  # None = down to the bottom edge
+HEADER_H = 8       # the stop-name band across the top
+MAX_TRAINS = 2     # trains shown per direction when there is room for both
+DESIGN_H = 64      # the canvas this app's layout was drawn for
+
+
+def _layout(height):
+    """Geometry for a canvas `height` px tall.
+
+    Derived rather than hard-coded because the canvas is not always 64 rows:
+    a 64-row panel driven without the address-E jumper reports 32, and this
+    app used to raise `y1 must be >= y0` on every frame there — taking the
+    whole sign down with it. Below the two-train threshold each direction
+    shows its next train only.
+
+    Returns first/last row pairs (inclusive) that tile the canvas with no
+    black seam, plus the top row of each direction block.
+    """
+    if height == DESIGN_H:
+        # The design size is hand-tuned (the bands are deliberately uneven so
+        # the blocks sit where they look right); don't let the derivation
+        # shift it by a pixel.
+        return {
+            "header_rows": (0, 7), "header_h": HEADER_H,
+            "bands": {"S": (8, 34), "N": (35, DESIGN_H - 1)},
+            "block_y": {"S": 10, "N": 37},
+            "block_h": MAX_TRAINS * ROW_H - ROW_GAP,
+            "trains": MAX_TRAINS,
+            "body_top": 10, "body_h": 37 + (MAX_TRAINS * ROW_H - ROW_GAP) - 10,
+        }
+
+    header_h = HEADER_H if height >= 24 else 0
+    body_h = height - header_h
+    trains = MAX_TRAINS if body_h >= 2 * (MAX_TRAINS * ROW_H - ROW_GAP) else 1
+    block_h = trains * ROW_H - ROW_GAP
+
+    half = body_h // 2                    # rows given to the southbound band
+    bands = {"S": (header_h, header_h + half - 1),
+             "N": (header_h + half, height - 1)}
+    # Center each block in its band; clamp so a very short canvas still draws.
+    block_y = {d: max(first, first + ((last - first + 1) - block_h) // 2)
+               for d, (first, last) in bands.items()}
+    return {
+        "header_rows": (0, max(header_h - 1, 0)),
+        "header_h": header_h,
+        "bands": bands,
+        "block_y": block_y,
+        "block_h": block_h,
+        "trains": trains,
+        "body_top": header_h,
+        "body_h": body_h,
+    }
 
 
 class SubwayApp(App):
@@ -223,23 +265,24 @@ class SubwayApp(App):
         pf = self.services.fonts.pixel()
         now = time.time()
         column_w = (self.services.width - CONTENT_X) // len(stops)
+        lay = _layout(self.services.height)
 
         for direction in ("S", "N"):
-            first, last = BAND_ROWS[direction]
-            last = self.services.height - 1 if last is None else last
+            first, last = lay["bands"][direction]
             band = self._band(direction)
             if band != (0, 0, 0):  # optional wash behind the whole block
                 draw.rectangle([0, first, self.services.width - 1, last], fill=band)
             # The gutter strip carries the direction, arrow knocked out of it.
             draw.rectangle([0, first, GUTTER - 1, last], fill=self._gutter(direction))
-            arrow_y = BLOCK_Y[direction] + (BLOCK_H - GLYPH_H) // 2
+            arrow_y = lay["block_y"][direction] + (lay["block_h"] - GLYPH_H) // 2
             _blit(draw, 1, arrow_y, ARROW_GLYPH[direction], ARROW_COLOR)
 
         # Header band, flush against the downtown band below it.
-        draw.rectangle(
-            [0, HEADER_ROWS[0], self.services.width - 1, HEADER_ROWS[1]],
-            fill=_rgb(self.config.get("header_band"), HEADER_BAND),
-        )
+        if lay["header_h"]:
+            draw.rectangle(
+                [0, lay["header_rows"][0], self.services.width - 1, lay["header_rows"][1]],
+                fill=_rgb(self.config.get("header_band"), HEADER_BAND),
+            )
 
         header_color = self._header_color()
         for index, stop in enumerate(stops):
@@ -249,21 +292,22 @@ class SubwayApp(App):
             if not self._has_feed(stop):
                 # This stop's feeds all failed — say so once for the column, rather
                 # than showing it as "no trains" in either direction.
-                _draw_centered(draw, pf, x, ("no", "feed"), PALETTE["dim"])
+                _draw_centered(draw, pf, x, ("no", "feed"), PALETTE["dim"], lay=lay)
                 continue
             for direction in ("S", "N"):
-                self._draw_block(draw, pf, x, BLOCK_Y[direction], stop, direction, now)
+                self._draw_block(draw, pf, x, lay["block_y"][direction], stop,
+                                 direction, now, lay["trains"])
 
         return image
 
-    def _draw_block(self, draw, pf, x, top, stop, direction, now):
-        """One direction's two rows for one stop."""
+    def _draw_block(self, draw, pf, x, top, stop, direction, now, rows=MAX_TRAINS):
+        """One direction's train rows for one stop (`rows` of them if there is room)."""
         text_y = top + (BULLET - GLYPH_H) // 2  # line text up with the bullets
         trains = self._next_trains(stop, direction, now)
         if not trains:
             pf.draw_text(draw, x, text_y, "-", PALETTE["dim"])
             return
-        for row, (route, mins) in enumerate(trains):
+        for row, (route, mins) in enumerate(trains[:rows]):
             self._draw_train(draw, pf, x, top + row * ROW_H, route, mins)
 
     @staticmethod
@@ -295,9 +339,10 @@ def _rgb(value, default):
     return default
 
 
-def _draw_centered(draw, font, x, lines, color, gap=3):
+def _draw_centered(draw, font, x, lines, color, gap=3, lay=None):
     """Stack `lines` vertically, centered in the body area below the header."""
-    top = BODY_TOP + (BODY_H - (len(lines) * (GLYPH_H + gap) - gap)) // 2
+    lay = lay or _layout(64)
+    top = lay["body_top"] + (lay["body_h"] - (len(lines) * (GLYPH_H + gap) - gap)) // 2
     for row, text in enumerate(lines):
         font.draw_text(draw, x, top + row * (GLYPH_H + gap), text, color)
 

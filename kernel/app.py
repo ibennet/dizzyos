@@ -30,12 +30,11 @@ class App:
 
     # --- rendering ---------------------------------------------------------
     def render(self, t):
-        """Return a PIL.Image for elapsed time `t` (seconds). Animate here."""
-        raise NotImplementedError
+        """Return a PIL.Image for elapsed time `t` (seconds). Animate here.
 
-    def draw(self, canvas, t):
-        """Default frame draw: render an image and blit it to the matrix canvas."""
-        canvas.SetImage(self.render(t).convert("RGB"))
+        The kernel owns the blit: it composes system overlays over this image
+        and pushes the result to the panels — apps never touch the canvas."""
+        raise NotImplementedError
 
     # --- helpers -----------------------------------------------------------
     def blank(self):

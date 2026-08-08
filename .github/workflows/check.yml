@@ -1,0 +1,24 @@
+# CI mirror of the local green gate: runs dev/check.sh on every push to main
+# and every PR. The whole suite is hardware-free — kernel/display.py falls back
+# to the emulator shim, so the runner needs nothing but Python and Pillow.
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: dev/check.sh
+        run: ./dev/check.sh

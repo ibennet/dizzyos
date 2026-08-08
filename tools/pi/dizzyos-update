@@ -1,0 +1,397 @@
+#!/usr/bin/env python3
+"""dizzyos self-updater — stdlib only, runs on the Pi from a systemd timer.
+
+Releases are GitHub *source tarballs* (auto-generated per tag — nothing is
+stored in GitHub Releases). The dizzyos app layer is pure Python, so an
+update is: download, unpack, flip a symlink, restart, health-check.
+
+Layout (see also bootstrap.sh):
+    /opt/dizzyos/releases/<tag>/   unpacked tarballs
+    /opt/dizzyos/current           symlink -> releases/<tag>; the flip IS the deploy
+    /opt/dizzyos/venv              shared venv (platform-managed)
+    /etc/dizzyos/update.conf       REPO=owner/name, optional CHANNEL
+    /run/dizzyos/heartbeat         touched by the running kernel; our health signal
+
+Health + rollback: after flipping and restarting we wait for a fresh
+heartbeat. No heartbeat -> flip back to the previous release, restart, and
+mark the new one `.bad` so the timer never retries it. A bad release must
+never brick a sign you'd have to go collect.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.error
+import urllib.request
+
+ROOT = "/opt/dizzyos"
+RELEASES = os.path.join(ROOT, "releases")
+CURRENT = os.path.join(ROOT, "current")
+CONF = "/etc/dizzyos/update.conf"
+HEARTBEAT = "/run/dizzyos/heartbeat"
+HEALTH_TIMEOUT = 90     # seconds to wait for a fresh heartbeat after restart
+KEEP = 2                # prior releases retained for rollback
+PENDING = os.path.join(RELEASES, ".pending")  # in-flight deploy record (crash-safe)
+
+
+def log(msg):
+    print(f"dizzyos-update: {msg}", flush=True)
+
+
+def conf():
+    values = {"REPO": "ibennet/dizzyos"}
+    if os.path.exists(CONF):
+        with open(CONF, encoding="utf-8") as fh:
+            for line in fh:
+                if "=" in line and not line.lstrip().startswith("#"):
+                    key, _, val = line.partition("=")
+                    values[key.strip()] = val.strip()
+    return values
+
+
+def http_json(url):
+    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
+                                               "User-Agent": "dizzyos-update"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+
+def latest_tag(repo):
+    """Newest release tag, or None before the first release has been cut."""
+    try:
+        return http_json(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
+
+
+def current_tag():
+    if os.path.islink(CURRENT):
+        return os.path.basename(os.readlink(CURRENT))
+    return None
+
+
+def resolve_sha(repo, ref_name):
+    """Resolve a tag or branch to the commit SHA it currently points at (derefs
+    annotated tags). Fetching by SHA makes a release immutable: a re-cut tag
+    can't silently hand two signs different code under one version string."""
+    return http_json(f"https://api.github.com/repos/{repo}/commits/{ref_name}")["sha"]
+
+
+def _safe_extract(tar, dest):
+    """Extract with the stdlib 'data' filter (py3.12+: blocks path traversal,
+    symlink/hardlink escapes, device nodes, setuid). On py3.11 (no filter=),
+    fall back to a manual check that covers names *and* link targets and rejects
+    special members — all of this runs as root, so it matters."""
+    try:
+        tar.extractall(dest, filter="data")
+    except TypeError:  # py3.11: extractall() has no filter= yet
+        for m in tar.getmembers():
+            for attr in (m.name, m.linkname):
+                if attr and (attr.startswith(("/", "..")) or ".." in attr.split("/")):
+                    raise RuntimeError(f"unsafe tar member: {m.name} -> {attr}")
+            if m.isdev() or m.issym() or m.islnk():
+                raise RuntimeError(f"unsafe tar member type: {m.name}")
+        tar.extractall(dest)
+
+
+def fetch_release(repo, ref, name):
+    """Download + unpack a source tarball into releases/<name>. Idempotent.
+    `ref` is whatever names the archive — a resolved SHA when we could reach the
+    API, else the symbolic ref."""
+    dest = os.path.join(RELEASES, name)
+    if os.path.isdir(dest):
+        return dest
+    url = f"https://github.com/{repo}/archive/{ref}.tar.gz"
+    log(f"downloading {url}")
+    os.makedirs(RELEASES, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=RELEASES) as tmp:
+        tar_path = os.path.join(tmp, "release.tar.gz")
+        with urllib.request.urlopen(url, timeout=120) as resp, open(tar_path, "wb") as out:
+            shutil.copyfileobj(resp, out)
+        with tarfile.open(tar_path) as tar:
+            _safe_extract(tar, tmp)
+        # GitHub tarballs unpack to a single "<repo>-<ref>/" top dir.
+        top = next(d for d in os.listdir(tmp)
+                   if os.path.isdir(os.path.join(tmp, d)) and d != "__MACOSX")
+        os.rename(os.path.join(tmp, top), dest)
+    with open(os.path.join(dest, ".release-ref"), "w", encoding="utf-8") as fh:
+        fh.write(ref)  # the exact ref/SHA this tree was built from
+    return dest
+
+
+def pip_install(release_dir):
+    reqs = os.path.join(release_dir, "requirements-pi.txt")
+    if os.path.exists(reqs):
+        subprocess.run([os.path.join(ROOT, "venv/bin/pip"), "install", "-q", "-r", reqs],
+                       check=True)
+
+
+def warm_font_cache(release_dir):
+    """Compile the bundled BDF fonts into the release's font cache now, as root.
+
+    At runtime the matrix library drops privileges to `daemon`, so the render
+    loop cannot write into the release tree — a release dir must be complete
+    and read-only by the time the service starts.
+    """
+    subprocess.run(
+        [os.path.join(ROOT, "venv/bin/python"), "-c",
+         "import sys; sys.path.insert(0, '.');"
+         "from kernel.render import FontBook; FontBook('fonts').bitmaps()"],
+        cwd=release_dir, check=False)
+    cache = os.path.join(release_dir, "fonts", ".cache")
+    if os.path.isdir(cache):
+        os.chmod(cache, 0o755)
+        for name in os.listdir(cache):
+            os.chmod(os.path.join(cache, name), 0o644)
+
+
+def flip(name):
+    """Atomically point `current` at releases/<name>."""
+    tmp = CURRENT + ".tmp"
+    if os.path.lexists(tmp):
+        os.remove(tmp)
+    os.symlink(os.path.join("releases", name), tmp)
+    os.replace(tmp, CURRENT)
+
+
+def clear_heartbeat():
+    """Remove the heartbeat file so `healthy()` waits for the *new* process to
+    recreate it. This is what lets the health check use plain existence instead
+    of comparing mtimes against wall-clock — the Pi has no RTC, so an NTP step
+    during the deploy could otherwise make a fresh beat look stale and trigger a
+    false rollback."""
+    try:
+        os.unlink(HEARTBEAT)
+    except FileNotFoundError:
+        pass
+
+
+def restart():
+    subprocess.run(["systemctl", "restart", "dizzyos"], check=True)
+
+
+def healthy():
+    """Wait for the kernel to prove it is rendering: the heartbeat reappears
+    after we cleared it (see clear_heartbeat). `Restart=always` would happily
+    loop a crashing release forever, which is exactly why this check exists."""
+    deadline = time.monotonic() + HEALTH_TIMEOUT
+    while time.monotonic() < deadline:
+        if os.path.exists(HEARTBEAT):
+            return True
+        time.sleep(3)
+    return False
+
+
+def sweep_orphans():
+    """Remove leftover download staging dirs (TemporaryDirectory names start
+    'tmp') from an interrupted fetch. Left in place they'd both eat SD space and
+    count against prune's retention, which could delete the rollback target."""
+    if not os.path.isdir(RELEASES):
+        return
+    for d in os.listdir(RELEASES):
+        path = os.path.join(RELEASES, d)
+        if d.startswith("tmp") and os.path.isdir(path):
+            log(f"sweeping orphan staging dir {d}")
+            shutil.rmtree(path, ignore_errors=True)
+
+
+def have_space(min_mb=150):
+    """Guard a download against a full SD card (a failed pip mid-deploy is worse
+    than skipping tonight's update)."""
+    try:
+        return shutil.disk_usage(RELEASES).free > min_mb * 1024 * 1024
+    except OSError:
+        return True
+
+
+def prune():
+    keep = {current_tag()}
+    tags = sorted((d for d in os.listdir(RELEASES)
+                   if os.path.isdir(os.path.join(RELEASES, d))
+                   and not d.startswith("tmp")),  # never count staging dirs
+                  key=lambda d: os.path.getmtime(os.path.join(RELEASES, d)),
+                  reverse=True)
+    for tag in tags[KEEP + 1:]:
+        if tag not in keep:
+            log(f"pruning old release {tag}")
+            shutil.rmtree(os.path.join(RELEASES, tag))
+
+
+def rollback(prev, reason):
+    """Flip back to `prev` — code *and* its pinned deps — and restart. Because
+    the venv is shared across releases, reinstalling the previous release's
+    pinned requirements undoes any dependency the failed release pulled in, so
+    the rollback restores the whole deploy, not just the source symlink."""
+    log(f"rolling back to {prev}: {reason}")
+    flip(prev)
+    pip_install(os.path.join(RELEASES, prev))
+    clear_heartbeat()
+    restart()
+
+
+def mark_bad(tag, reason):
+    """Two-strike marking: a single failed health check (a slow first data
+    refresh, WiFi still associating after the restart) only records a strike and
+    is retried on the next timer; a second consecutive failure writes `.bad`
+    (with the reason) so the tag is never retried automatically."""
+    strike = os.path.join(RELEASES, tag + ".strike")
+    if os.path.exists(strike):
+        with open(os.path.join(RELEASES, tag + ".bad"), "w", encoding="utf-8") as fh:
+            fh.write(f"{reason}\n")
+        os.remove(strike)
+        log(f"{tag}: {reason} — second failure, marked bad")
+    else:
+        open(strike, "w").close()
+        log(f"{tag}: {reason} — first failure, will retry next timer")
+
+
+def reconcile_pending():
+    """Recover from a deploy interrupted (power loss, OOM kill) between the flip
+    and the health check. `.pending` records `<new> <prev>`; if we're sitting on
+    the interrupted release, re-verify it now and roll back if it isn't
+    rendering — otherwise the interrupted release would be accepted unchecked."""
+    if not os.path.exists(PENDING):
+        return
+    with open(PENDING, encoding="utf-8") as fh:
+        parts = fh.read().split()
+    os.remove(PENDING)
+    new = parts[0] if parts else None
+    prev = parts[1] if len(parts) > 1 else None
+    if not new or current_tag() != new:
+        return
+    log(f"reconciling interrupted deploy of {new}")
+    if healthy():
+        log(f"{new} is healthy after the interrupted deploy")
+    elif prev:
+        mark_bad(new, "no heartbeat after interrupted deploy")
+        rollback(prev, "interrupted deploy left a non-rendering release")
+
+
+def refresh_payload(release_dir):
+    """Stage the newest platform scripts into payload so a *re-bootstrap* uses
+    them. This does NOT hot-apply anything: the timer runs the updater from the
+    release tree (current/), and systemd units / sudo helpers are installed once
+    by bootstrap.sh — changing those still needs a re-bootstrap or re-flash (see
+    ADR 0002). We deliberately don't copy units here, which never took effect and
+    only implied otherwise."""
+    src = os.path.join(release_dir, "tools", "pi")
+    if not os.path.isdir(src):
+        return
+    payload = os.path.join(ROOT, "payload")
+    for fname in ("dizzyos-update", "bootstrap.sh", "write-config", "nmcli-join"):
+        path = os.path.join(src, fname)
+        if os.path.exists(path):
+            shutil.copy2(path, payload)
+            os.chmod(os.path.join(payload, fname), 0o755)
+
+
+def main():
+    install = "--install" in sys.argv
+    force = "--force" in sys.argv
+    values = conf()
+    repo = values["REPO"]
+
+    # First, recover any deploy that a power loss interrupted mid-flip, and
+    # clear staging dirs left by an interrupted download.
+    if os.path.isdir(RELEASES):
+        reconcile_pending()
+        sweep_orphans()
+
+    if values.get("REF"):
+        # Dev pin: REF=<branch> in update.conf installs that branch instead
+        # of a release — the way to test unmerged work on real hardware
+        # (set at flash time via `flash.sh --ref`). Remove the line and
+        # re-run to return to release tracking. --force refetches the
+        # branch tip.
+        branch = values["REF"]
+        tag, symbolic, fallback_ref = ("pin-" + branch.replace("/", "-"),
+                                       branch, f"refs/heads/{branch}")
+        log(f"pinned to branch {branch} (REF in {CONF})")
+        pinned = os.path.join(RELEASES, tag)
+        if force and os.path.isdir(pinned):
+            shutil.rmtree(pinned)
+    else:
+        tag = latest_tag(repo)
+        if tag is None:
+            if not install:
+                log("no releases published yet; nothing to do")
+                return 0
+            # Bootstrap before the first release exists: track main directly.
+            log("no releases yet — installing from the main branch")
+            tag, symbolic, fallback_ref = "main", "main", "refs/heads/main"
+        else:
+            symbolic, fallback_ref = tag, f"refs/tags/{tag}"
+
+    prev = current_tag()
+    if tag == prev and not force:
+        log(f"already on {tag}")
+        return 0
+    if os.path.exists(os.path.join(RELEASES, tag + ".bad")) and not force:
+        log(f"{tag} is marked bad from a failed deploy; skipping (--force to retry)")
+        return 0
+
+    if not have_space():
+        log("low on disk — skipping this update rather than risk a half-deploy")
+        return 1
+
+    # Pin to the commit the tag/branch points at *now*, so the fetched content
+    # is immutable even if the tag is later re-cut. Fall back to the symbolic
+    # ref if the API is unreachable.
+    try:
+        ref = resolve_sha(repo, symbolic)
+        log(f"resolved {symbolic} -> {ref[:12]}")
+    except Exception as exc:  # noqa: BLE001 - degrade to the symbolic ref
+        log(f"could not resolve {symbolic} to a SHA ({exc}); fetching by ref")
+        ref = fallback_ref
+
+    release_dir = fetch_release(repo, ref, tag)
+    pip_install(release_dir)
+    warm_font_cache(release_dir)
+
+    # Record the in-flight deploy *before* touching `current`. If power is lost
+    # between the flip and the health check, reconcile_pending() (next run) sees
+    # this and re-verifies, rather than the already-on-tag shortcut accepting an
+    # unchecked release.
+    os.makedirs(RELEASES, exist_ok=True)
+    with open(PENDING, "w", encoding="utf-8") as fh:
+        fh.write(f"{tag} {prev or ''}")
+
+    log(f"flipping {prev or '(none)'} -> {tag}")
+    try:
+        clear_heartbeat()
+        flip(tag)
+        restart()
+        ok = healthy()
+    except BaseException as exc:  # noqa: BLE001 - any failure must still roll back
+        log(f"deploy of {tag} raised: {exc}")
+        ok = False
+
+    if not ok:
+        log(f"HEALTH CHECK FAILED for {tag}")
+        mark_bad(tag, "no heartbeat after deploy")
+        if prev:
+            rollback(prev, "new release did not render")
+        if os.path.exists(PENDING):
+            os.remove(PENDING)
+        return 1
+
+    if os.path.exists(PENDING):
+        os.remove(PENDING)
+    strike = os.path.join(RELEASES, tag + ".strike")
+    if os.path.exists(strike):
+        os.remove(strike)  # a good deploy clears any earlier transient strike
+    log(f"{tag} is up and rendering")
+    refresh_payload(release_dir)
+    prune()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
