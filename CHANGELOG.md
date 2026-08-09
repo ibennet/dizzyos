@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.0](https://github.com/ibennet/dizzyos/compare/v1.1.0...v1.2.0) (2026-08-09)
+
+
+### Features
+
+* **apps:** bus app — live next-bus times for the M15/M15-SBS/M57/M31 at nearby stops ([#15](https://github.com/ibennet/dizzyos/issues/15)) ([46c9f20](https://github.com/ibennet/dizzyos/commit/46c9f202b74c9ef27fee6dc9bf8a143c38ef3270))
+* check-for-updates -&gt; update-now flow on the LAN settings page ([#14](https://github.com/ibennet/dizzyos/issues/14)) ([b2b85b9](https://github.com/ibennet/dizzyos/commit/b2b85b9e1f4a0ff034346a2f7229c0b3662f1b40))
+* **kernel:** configurable dwell-progress indicator ([#18](https://github.com/ibennet/dizzyos/issues/18)) ([7c1b975](https://github.com/ibennet/dizzyos/commit/7c1b9752798c5ac0fa23b50e6b2a02ca684d0da7))
+* **tools:** opt-in Izzy's Cafe order server in SD provisioning ([#17](https://github.com/ibennet/dizzyos/issues/17)) ([05b89f4](https://github.com/ibennet/dizzyos/commit/05b89f4517b59f04472181fad13fb3799fff2ad8))
+
 ## [1.1.0](https://github.com/ibennet/dizzyos/compare/v1.0.0...v1.1.0) (2026-08-09)
 
 
