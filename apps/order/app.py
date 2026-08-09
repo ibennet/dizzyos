@@ -106,12 +106,20 @@ class OrderApp(App):
         pf.draw_text(draw, 6 + (w_order - w_now) // 2, 44 + bob, "now!", color, TEXT_SCALE)
 
     def _draw_arrow(self, draw, t):
-        y = self._qr_y + (len(self._qr) * int(self.config.get("scale", 1))) // 2
-        x0, x1 = 68, self._qr_x - 4
+        qr_mid = self._qr_y + (len(self._qr) * int(self.config.get("scale", 1))) // 2
+        text_mid = 42  # vertical center of the "order now!" block
+        tip = self._qr_x - 4
+        # Elbow: out from the text, up to the QR's center line, then in.
+        path = [(66, text_mid), (tip - 7, text_mid), (tip - 7, qr_mid), (tip - 2, qr_mid)]
         phase = int(t * 12) % 6
-        for x in range(x0 - phase, x1 - 3, 6):  # marching dashes, 3 on / 3 off
-            draw.line([max(x, x0), y, min(x + 2, x1 - 4), y], fill=ARROW)
-        draw.polygon([(x1 - 3, y - 3), (x1, y), (x1 - 3, y + 3)], fill=ARROW)
+        d = 0
+        for (x0, y0), (x1, y1) in zip(path, path[1:]):
+            sx, sy = (x1 > x0) - (x1 < x0), (y1 > y0) - (y1 < y0)
+            for i in range(abs(x1 - x0) + abs(y1 - y0)):
+                if (d - phase) % 6 < 3:  # marching dashes, 3 on / 3 off
+                    draw.point((x0 + sx * i, y0 + sy * i), fill=ARROW)
+                d += 1
+        draw.polygon([(tip - 3, qr_mid - 3), (tip, qr_mid), (tip - 3, qr_mid + 3)], fill=ARROW)
 
     def _draw_sparkles(self, draw, t):
         for x, y, phase in SPARKLES:
