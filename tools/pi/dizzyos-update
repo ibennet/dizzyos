@@ -37,6 +37,7 @@ HEARTBEAT = "/run/dizzyos/heartbeat"
 HEALTH_TIMEOUT = 90     # seconds to wait for a fresh heartbeat after restart
 KEEP = 2                # prior releases retained for rollback
 PENDING = os.path.join(RELEASES, ".pending")  # in-flight deploy record (crash-safe)
+ETAG_STATE = os.path.join(RELEASES, ".latest-etag")  # ETag + tag of the last poll
 
 
 def log(msg):
@@ -61,14 +62,54 @@ def http_json(url):
         return json.load(resp)
 
 
-def latest_tag(repo):
-    """Newest release tag, or None before the first release has been cut."""
+def _read_etag_state():
     try:
-        return http_json(f"https://api.github.com/repos/{repo}/releases/latest")["tag_name"]
+        with open(ETAG_STATE, encoding="utf-8") as fh:
+            state = json.load(fh)
+        if isinstance(state, dict) and state.get("etag") and state.get("tag"):
+            return state
+    except (OSError, ValueError):
+        pass
+    return None
+
+
+def _write_etag_state(etag, tag):
+    os.makedirs(RELEASES, exist_ok=True)
+    with open(ETAG_STATE, "w", encoding="utf-8") as fh:
+        json.dump({"etag": etag, "tag": tag}, fh)
+
+
+def latest_tag(repo, force=False):
+    """Newest release tag, or None before the first release has been cut.
+
+    Polls /releases/latest conditionally: we replay the ETag from the previous
+    poll, and GitHub answers 304 when nothing changed — which does NOT count
+    against the unauthenticated rate limit (60/h). That's what lets the timer
+    check every few minutes instead of nightly without ever running out of
+    quota: an idle poll is one free 304, and only an actual new release (or an
+    expired cache) costs a real request. On 304 the tag cached alongside the
+    ETag is returned; every downstream decision (already-on-tag, .bad skip,
+    deploy) is unchanged. --force skips the cache for a fresh answer."""
+    cached = None if force else _read_etag_state()
+    headers = {"Accept": "application/vnd.github+json", "User-Agent": "dizzyos-update"}
+    if cached:
+        headers["If-None-Match"] = cached["etag"]
+    req = urllib.request.Request(f"https://api.github.com/repos/{repo}/releases/latest",
+                                 headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = json.load(resp)
+            etag = resp.headers.get("ETag")
     except urllib.error.HTTPError as exc:
+        if exc.code == 304:
+            return cached["tag"]
         if exc.code == 404:
             return None
         raise
+    tag = data["tag_name"]
+    if etag:
+        _write_etag_state(etag, tag)
+    return tag
 
 
 def current_tag():
@@ -318,7 +359,7 @@ def main():
         if force and os.path.isdir(pinned):
             shutil.rmtree(pinned)
     else:
-        tag = latest_tag(repo)
+        tag = latest_tag(repo, force)
         if tag is None:
             if not install:
                 log("no releases published yet; nothing to do")

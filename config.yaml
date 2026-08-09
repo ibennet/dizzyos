@@ -25,6 +25,7 @@ launcher:
     - weather
     - subway
     - bus
+    - order
   default_dwell: 20              # seconds per app when an app doesn't set its own
   target_fps: 24
   # How one app hands off to the next. Options:
@@ -54,3 +55,5 @@ apps:
                                  # override `stops` here to follow different stations
   bus: {}                        # defaults come from apps/bus/manifest.yaml;
                                  # override `stops` there to follow different stops/routes
+  order: {}                      # defaults come from apps/order/manifest.yaml;
+                                 # override `url` / `white_level` here if needed

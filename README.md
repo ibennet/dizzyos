@@ -144,7 +144,9 @@ it survives every update.
 
 ### Self-updating
 
-A nightly timer (04:00, jittered) checks for the latest GitHub release, unpacks its
+A timer polls for the latest GitHub release every five minutes (ETag-conditional, so
+an unchanged answer is a rate-limit-free 304 — a new release reaches signs within
+minutes of the tag landing). When one appears, the updater unpacks its
 source tarball to `/opt/dizzyos/releases/<tag>/`, and atomically flips the
 `/opt/dizzyos/current` symlink. The launcher touches a heartbeat file every frame, so
 the updater can tell whether the new release actually renders — if it doesn't, the

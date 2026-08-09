@@ -10,9 +10,13 @@ it gets exercised here. Exits non-zero on the first failure.
 
 import importlib.machinery
 import importlib.util
+import io
+import json
 import os
 import sys
 import tempfile
+import urllib.error
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 UPDATER = os.path.join(os.path.dirname(HERE), "tools", "pi", "dizzyos-update")
@@ -44,6 +48,7 @@ up.RELEASES = os.path.join(work, "releases")
 up.CURRENT = os.path.join(work, "current")
 up.HEARTBEAT = os.path.join(work, "heartbeat")
 up.PENDING = os.path.join(up.RELEASES, ".pending")
+up.ETAG_STATE = os.path.join(up.RELEASES, ".latest-etag")
 up.CONF = os.path.join(work, "update.conf")
 up.HEALTH_TIMEOUT = 2
 os.makedirs(up.RELEASES, exist_ok=True)
@@ -51,6 +56,7 @@ with open(up.CONF, "w", encoding="utf-8") as fh:
     fh.write("REPO=example/dizzyos\n")
 
 # --- fakes: no network, no pip, no systemd ----------------------------------
+real_latest_tag = up.latest_tag  # the ETag section below tests the real one
 up.resolve_sha = lambda repo, ref: "deadbeef"
 up.pip_install = lambda d: None
 up.warm_font_cache = lambda d: None
@@ -76,7 +82,7 @@ up.restart = fake_restart
 
 # --- a healthy deploy --------------------------------------------------------
 print("deploy")
-up.latest_tag = lambda repo: "v1"
+up.latest_tag = lambda repo, force=False: "v1"
 sys.argv = ["dizzyos-update", "--install"]
 render_ok[0] = True
 check("healthy deploy returns 0", up.main() == 0)
@@ -85,7 +91,7 @@ check("nothing left pending", not os.path.exists(up.PENDING))
 
 # --- a broken deploy: first failure strikes and rolls back -------------------
 print("rollback")
-up.latest_tag = lambda repo: "v2"
+up.latest_tag = lambda repo, force=False: "v2"
 render_ok[0] = False
 check("broken deploy returns 1", up.main() == 1)
 check("rolled back to v1", up.current_tag() == "v1")
@@ -130,5 +136,74 @@ check("reconcile rolls back a non-rendering interrupted deploy",
       up.current_tag() == "v1")
 check("the interrupted release is struck (two-strike, not yet bad)",
       os.path.exists(rel("v11.strike")) and not os.path.exists(rel("v11.bad")))
+
+# --- ETag polling: 200 caches, 304 answers from cache, --force bypasses ------
+print("etag")
+
+
+class _Resp(io.BytesIO):
+    """Just enough of an http.client response for latest_tag: a JSON body plus
+    a .headers with .get()."""
+
+    def __init__(self, body, etag):
+        super().__init__(json.dumps(body).encode())
+        self.headers = {"ETag": etag}
+
+
+requests_seen = []
+responses = []  # each entry: a _Resp to return, or an HTTPError to raise
+
+
+def fake_urlopen(req, timeout=None):
+    requests_seen.append(req)
+    resp = responses.pop(0)
+    if isinstance(resp, Exception):
+        raise resp
+    return resp
+
+
+real_urlopen = urllib.request.urlopen
+urllib.request.urlopen = fake_urlopen
+try:
+    # First poll: a plain 200 — tag returned, ETag + tag cached on disk.
+    responses.append(_Resp({"tag_name": "v3"}, 'W/"abc"'))
+    check("200 poll returns the tag", real_latest_tag("example/dizzyos") == "v3")
+    check("first poll sends no If-None-Match",
+          not requests_seen[-1].has_header("If-none-match"))
+    check("ETag state is cached", os.path.exists(up.ETAG_STATE))
+
+    # Second poll: GitHub answers 304 — cached tag returned, no JSON parsed.
+    responses.append(urllib.error.HTTPError("url", 304, "Not Modified", {}, None))
+    check("304 poll answers from cache", real_latest_tag("example/dizzyos") == "v3")
+    check("cached ETag was replayed",
+          requests_seen[-1].get_header("If-none-match") == 'W/"abc"')
+
+    # A new release: 200 with a new tag replaces the cache.
+    responses.append(_Resp({"tag_name": "v4"}, 'W/"def"'))
+    check("new release supersedes the cache",
+          real_latest_tag("example/dizzyos") == "v4")
+    responses.append(urllib.error.HTTPError("url", 304, "Not Modified", {}, None))
+    check("cache now serves the new tag", real_latest_tag("example/dizzyos") == "v4")
+
+    # --force skips the conditional so a re-cut latest is always refetched.
+    responses.append(_Resp({"tag_name": "v4"}, 'W/"def"'))
+    check("--force sends no If-None-Match",
+          real_latest_tag("example/dizzyos", force=True) == "v4"
+          and not requests_seen[-1].has_header("If-none-match"))
+
+    # A corrupt state file degrades to an unconditional poll, not a crash.
+    with open(up.ETAG_STATE, "w", encoding="utf-8") as fh:
+        fh.write("not json")
+    responses.append(_Resp({"tag_name": "v4"}, 'W/"def"'))
+    check("corrupt ETag state degrades to a plain poll",
+          real_latest_tag("example/dizzyos") == "v4"
+          and not requests_seen[-1].has_header("If-none-match"))
+
+    # Before the first release: 404 still means "no releases yet".
+    responses.append(urllib.error.HTTPError("url", 404, "Not Found", {}, None))
+    check("404 still returns None",
+          real_latest_tag("example/dizzyos", force=True) is None)
+finally:
+    urllib.request.urlopen = real_urlopen
 
 print(f"\nsmoke_update: all {passed} checks passed")
