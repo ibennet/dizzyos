@@ -9,8 +9,8 @@ frame. Configured under `launcher.progress` in config.yaml; when disabled
 screen" is meaningless) draw() is a no-op.
 
 Styles:
-  arc    a tiny clock-style ring in the bottom-right corner, lit clockwise
-         (the default)
+  arc    a tiny 5x5 clock-style ring in the bottom-right corner, lit
+         clockwise (the default)
   bar    a thin strip flush along the top or bottom edge, filling across
   dots   one dot per app in the rotation, page-indicator style; the current
          app's dot brightens as its dwell elapses
@@ -18,16 +18,17 @@ Styles:
 
 STYLES = ("bar", "dots", "arc")
 
-#: Perimeter of a 7x7 ring, ordered clockwise from top-center — the sweep
+#: Perimeter of a 5x5 ring, ordered clockwise from top-center — the sweep
 #: order for the `arc` style. Hand-plotted like overlay.py's wifi glyph:
 #: Pillow's arc() staircases into mush at this size.
 _ARC_RING = [
-    (3, 0), (4, 0),
-    (5, 1), (6, 2), (6, 3), (6, 4), (5, 5),
-    (4, 6), (3, 6), (2, 6),
-    (1, 5), (0, 4), (0, 3), (0, 2), (1, 1),
-    (2, 0),
+    (2, 0), (3, 0),
+    (4, 1), (4, 2), (4, 3),
+    (3, 4), (2, 4), (1, 4),
+    (0, 3), (0, 2), (0, 1),
+    (1, 0),
 ]
+_ARC_SIZE = 5
 _ARC_MARGIN = 2  # px between the ring's backdrop tile and the frame edge
 
 
@@ -113,13 +114,13 @@ class ProgressIndicator:
         return
 
     def _draw_arc(self, frame, shown):
-        # 7x7 ring on a black backdrop tile, bottom-right, lit clockwise from
-        # twelve o'clock. 16 sweep positions — plenty at this size.
-        ox = frame.width - 7 - _ARC_MARGIN
-        oy = frame.height - 7 - _ARC_MARGIN
+        # 5x5 ring on a black backdrop tile, bottom-right, lit clockwise from
+        # twelve o'clock. 12 sweep positions — plenty at this size.
+        ox = frame.width - _ARC_SIZE - _ARC_MARGIN
+        oy = frame.height - _ARC_SIZE - _ARC_MARGIN
         px = frame.load()
-        for x in range(ox - 1, min(ox + 8, frame.width)):
-            for y in range(oy - 1, min(oy + 8, frame.height)):
+        for x in range(ox - 1, min(ox + _ARC_SIZE + 1, frame.width)):
+            for y in range(oy - 1, min(oy + _ARC_SIZE + 1, frame.height)):
                 px[x, y] = (0, 0, 0)
         lit = int(round(shown * len(_ARC_RING)))
         for i, (x, y) in enumerate(_ARC_RING):
