@@ -171,6 +171,33 @@ check("save triggers a restart", restarts == [1])
 with open(cfg_path + ".prev", encoding="utf-8") as fh:
     check("atomic write keeps the previous config as .prev", "rows: 64" in fh.read())
 
+# Update flow: check surfaces a newer tag and an "update now" button; running
+# it kicks the (injected) updater and clears the pending state.
+starts = []
+server.fetch_latest = lambda: "v9.9.9"
+server.start_update = lambda: (starts.append(1), (True, ""))[1]
+page = post("/update/check", csrf=csrf).read().decode()
+check("update check surfaces the newer tag", "update available: v9.9.9" in page)
+check("update-now button appears once an update is known", "/update/run" in page)
+page = post("/update/run", csrf=csrf).read().decode()
+check("update now starts the updater", starts == [1])
+check("a triggered update clears the update-now button", "/update/run" not in page)
+check("update now without a prior check is refused",
+      "check for updates first" in post("/update/run", csrf=csrf).read().decode())
+server.fetch_latest = lambda: "smoke"  # matches version= above
+page = post("/update/check", csrf=csrf).read().decode()
+check("matching tag reports up to date", "up to date" in page)
+check("no update-now button when up to date", "/update/run" not in page)
+
+
+def _offline():
+    raise urllib.error.URLError("offline")
+
+
+server.fetch_latest = _offline
+check("an unreachable check fails soft with a message",
+      "update check failed" in post("/update/check", csrf=csrf).read().decode())
+
 os.unlink(cfg_path)
 if os.path.exists(cfg_path + ".prev"):
     os.unlink(cfg_path + ".prev")
