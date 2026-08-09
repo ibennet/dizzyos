@@ -8,3 +8,4 @@
 # keep PILLOW there in sync with this line when bumping.
 Pillow==10.4.0
 PyYAML==6.0.2
+qrcode==7.4.2

@@ -1,0 +1,14 @@
+name: Order
+description: Whimsical "order now!" with an arrow to a scannable QR code
+dwell: 30
+# Where the QR code sends people. 29 bytes — fits a Version 3 code at EC M in
+# byte mode (up to 42 bytes); anything longer and the app falls back to an
+# error frame instead of silently growing past the panel.
+url: "https://izzybennett.com/order"
+# LED px per QR module. 1 = 37x37 px (V3 + full quiet zone), the module density
+# validated on hardware. Bump to 2 only if you also shrink the layout — 74px
+# won't fit the 64px panel height.
+scale: 1
+# Brightness of the "light" modules, 0-255. Lower it (e.g. 140) if LED bloom
+# from lit modules bleeds into dark ones and phones stop scanning.
+white_level: 255
