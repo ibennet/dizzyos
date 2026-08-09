@@ -1,7 +1,8 @@
 """Order app — "order now!" pointing at a scannable QR code.
 
-The left half is the pitch: bobbing lowercase "order now!" in a warm pulsing
-color, a few twinkling sparkles, and a marching-dash arrow leading the eye to
+The left half is the pitch: a "welcome to izzy's cafe!" greeting over bobbing
+lowercase "order now!" in a warm pulsing color, a few twinkling sparkles, and
+a marching-dash arrow leading the eye to
 the right half: a Version 3 QR code (1 LED px per module, full quiet zone —
 the density validated on hardware by the qr_test app) that opens the online
 order page. The QR frame is rendered once and never animated; a code that
@@ -24,11 +25,14 @@ QR_EC = "M"
 TEXT_SCALE = 2
 AMBER = (255, 180, 70)
 CORAL = (255, 120, 130)
+CREAM = (235, 225, 195)
 ARROW = (120, 220, 160)
 SPARKLE = (255, 240, 190)
 
+WELCOME = ("welcome to", "izzy's cafe!")
+
 # (x, y, phase) — hand-placed twinkles around the text block.
-SPARKLES = [(4, 4, 0.0), (68, 8, 2.1), (10, 48, 4.2), (58, 55, 1.3), (72, 44, 3.4)]
+SPARKLES = [(3, 24, 0.0), (80, 4, 2.1), (66, 56, 4.2), (4, 58, 1.3), (78, 24, 3.4)]
 
 
 def _matrix(payload, version, ec_level):
@@ -91,12 +95,15 @@ class OrderApp(App):
 
     # --- animated layer -----------------------------------------------------
     def _draw_text(self, draw, pf, t):
+        mid = self._qr_x // 2  # center of the region left of the QR
+        for i, line in enumerate(WELCOME):
+            pf.draw_text(draw, mid - pf.measure(line) // 2, 3 + i * 9, line, CREAM)
         bob = round(1.5 * math.sin(t * 2.2))
         color = _lerp(AMBER, CORAL, (math.sin(t * 1.7) + 1) / 2)
         w_order = pf.measure("order", TEXT_SCALE)
         w_now = pf.measure("now!", TEXT_SCALE)
-        pf.draw_text(draw, 6, 10 + bob, "order", color, TEXT_SCALE)
-        pf.draw_text(draw, 6 + (w_order - w_now) // 2, 28 + bob, "now!", color, TEXT_SCALE)
+        pf.draw_text(draw, 6, 26 + bob, "order", color, TEXT_SCALE)
+        pf.draw_text(draw, 6 + (w_order - w_now) // 2, 44 + bob, "now!", color, TEXT_SCALE)
 
     def _draw_arrow(self, draw, t):
         y = self._qr_y + (len(self._qr) * int(self.config.get("scale", 1))) // 2
