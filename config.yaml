@@ -20,12 +20,14 @@ matrix:
   # pixel_mapper_config: "Rotate:90"   # uncomment to stack the panels as a tall 64x128
 
 launcher:
-  rotation:                      # apps cycle in this order
-    - cafe_menu
+  rotation:                      # apps cycle in this order; repeats are allowed and
+    - cafe_menu                  # weight an app to more slots per cycle
+    - order
     - weather
+    - cafe_menu
+    - order
     - subway
     - bus
-    - order
   default_dwell: 10              # seconds per app when an app doesn't set its own
   target_fps: 60
   # How one app hands off to the next. Options:
