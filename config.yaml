@@ -26,7 +26,7 @@ launcher:
     - subway
     - order
   default_dwell: 10              # seconds per app when an app doesn't set its own
-  target_fps: 24
+  target_fps: 60
   # How one app hands off to the next. Options:
   #   slide       iPad-style — both frames travel together, eased in and out
   #   crossfade   the two frames dissolve through each other
