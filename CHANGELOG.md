@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/ibennet/dizzyos/compare/v1.0.0...v1.1.0) (2026-08-09)
+
+
+### Features
+
+* **apps:** order app — lowercase 'order now!' arrowing at a scannable QR ([#12](https://github.com/ibennet/dizzyos/issues/12)) ([1a67fd1](https://github.com/ibennet/dizzyos/commit/1a67fd1fa04761066222d19f03fd374fd04a2048))
+* **tools:** poll for releases every 5 minutes with ETag-conditional requests ([#11](https://github.com/ibennet/dizzyos/issues/11)) ([cad3487](https://github.com/ibennet/dizzyos/commit/cad3487f4d019e72c050918f55bd7d76871abfd4))
+
 ## 1.0.0 (2026-08-08)
 
 
