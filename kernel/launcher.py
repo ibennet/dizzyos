@@ -13,6 +13,8 @@ import time
 
 from PIL import Image, ImageDraw
 
+from .progress import ProgressIndicator
+
 #: Transition styles selectable via `launcher.transition` in config.yaml.
 TRANSITIONS = ("crossfade", "slide", "wipe", "blank_wipe", "cut_wipe", "none")
 
@@ -96,6 +98,7 @@ class Launcher:
         self.target_fps = launcher_cfg.get("target_fps", 24)
         self.transition_ms = launcher_cfg.get("transition_ms", 600)
         self.transition = launcher_cfg.get("transition", "crossfade")
+        self.progress = ProgressIndicator(launcher_cfg.get("progress"), services.log)
 
     def run(self):
         """Run forever, cycling through apps. Ctrl-C to stop."""
@@ -109,14 +112,14 @@ class Launcher:
         index = 0
         while True:
             app = self.apps[index]
-            canvas = self._run_app(app, canvas)
+            canvas = self._run_app(app, canvas, index)
             if len(self.apps) > 1:
                 nxt = self.apps[(index + 1) % len(self.apps)]
                 canvas = self._transition_to(nxt, app, canvas)
             index = (index + 1) % len(self.apps)
 
     # ------------------------------------------------------------------
-    def _run_app(self, app, canvas):
+    def _run_app(self, app, canvas, index=0):
         self._safe(app, "on_start", self.services)
         stop_refresh = self._start_refresh(app)
         try:
@@ -124,14 +127,16 @@ class Launcher:
             dwell = app.dwell or self.default_dwell
             frame_time = 1.0 / self.target_fps
             while (self.clock() - start) < dwell:
-                frame = self._render(app, self.clock() - start)
+                elapsed = self.clock() - start
+                frame = self._render(app, elapsed)
                 if frame is None:  # app is broken — show the fallback, don't
                     # hot-spin: _render_fallback paces itself, so a rotation of
                     # all-broken apps stays at the frame rate rather than pegging
                     # the CPU and churning refresh threads.
                     canvas = self._render_fallback(canvas, [app.name, "not rendering"])
                     continue
-                canvas.SetImage(self._compose(frame))
+                canvas.SetImage(self._compose(frame, progress=elapsed / dwell,
+                                              elapsed=elapsed, index=index))
                 canvas = self.matrix.SwapOnVSync(canvas)
                 self._beat()
                 self.sleep(frame_time)
@@ -217,13 +222,17 @@ class Launcher:
         return canvas
 
     # ------------------------------------------------------------------
-    def _compose(self, frame):
-        """A finished frame -> what actually hits the panels: RGB, with any
-        system overlays (no-wifi icon, setup PIN) composited on top."""
+    def _compose(self, frame, progress=None, elapsed=None, index=0):
+        """A finished frame -> what actually hits the panels: RGB, with the
+        dwell-progress indicator and any system overlays (no-wifi icon, setup
+        PIN) composited on top. `progress` is None outside a dwell (transitions,
+        fallback frames), which hides the indicator; overlays draw last so
+        system status always wins the pixels."""
         # convert() to the same mode returns a *copy*, which is load-bearing:
         # overlays composite in place, and an app may hand us a cached/pre-
         # rendered Image — without this copy the overlay would burn into it.
         frame = frame.convert("RGB")
+        self.progress.draw(frame, progress, elapsed, index, len(self.apps))
         if self.overlays:
             frame = self.overlays.compose(frame)
         return frame

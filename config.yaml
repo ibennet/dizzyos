@@ -26,8 +26,8 @@ launcher:
     - subway
     - bus
     - order
-  default_dwell: 20              # seconds per app when an app doesn't set its own
-  target_fps: 24
+  default_dwell: 10              # seconds per app when an app doesn't set its own
+  target_fps: 60
   # How one app hands off to the next. Options:
   #   slide       iPad-style — both frames travel together, eased in and out
   #   crossfade   the two frames dissolve through each other
@@ -37,6 +37,15 @@ launcher:
   #   none        hard cut, no animation
   transition: slide
   transition_ms: 600
+  progress:                      # dwell-progress indicator: time until the next app
+    enabled: true
+    style: arc                   # arc | bar | dots
+    position: bottom             # bar only: bottom | top
+    direction: fill              # fill (elapsed) | drain (time remaining)
+    thickness: 1                 # px tall, bar only
+    color: [90, 90, 110]         # the lit portion
+    track: [18, 18, 24]          # the unlit remainder ([0, 0, 0] hides the track)
+    show_after: 0                # appear only after N seconds of dwell (0 = always)
 
 system:
   network_monitor: true          # red no-wifi icon (top-left) while offline

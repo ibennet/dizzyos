@@ -259,4 +259,37 @@ ticks[0] = 0.0
 launcher._run_app(good, FakeCanvas())
 check("a good app still renders after a broken one", good.frames > 0)
 
+# --- dwell-progress indicator -------------------------------------------------
+# The launcher paints it during an app's dwell (kernel chrome, bottom edge) and
+# hides it outside one — a transition or fallback frame passes progress=None.
+print("progress indicator")
+BAR = (90, 90, 110)
+launcher = Launcher(FakeMatrix(), [GoodApp(), GoodApp()],
+                    {"launcher": {"default_dwell": 1, "target_fps": 4,
+                                  "transition": "none",
+                                  "progress": {"enabled": True, "style": "bar",
+                                               "color": list(BAR)}}},
+                    services,
+                    clock=lambda: ticks[0], sleep=lambda s: ticks.__setitem__(0, ticks[0] + s))
+ticks[0] = 0.0
+canvas = FakeCanvas()
+launcher._run_app(GoodApp(), canvas, index=0)
+last = canvas.last if hasattr(canvas, "last") else None
+check("bar is painted on the bottom row during a dwell",
+      last is not None and last.load()[0, last.height - 1] == BAR)
+composed = launcher._compose(Image.new("RGB", (128, 32), "blue"), progress=None)
+check("bar is hidden outside a dwell (progress=None)",
+      composed.load()[0, 31] == (0, 0, 255))
+composed = launcher._compose(Image.new("RGB", (128, 32), "blue"), progress=0.5)
+check("half progress lights half the width",
+      composed.load()[63, 31] == BAR and composed.load()[64, 31] != BAR)
+from kernel.progress import ProgressIndicator
+single = ProgressIndicator({"enabled": True})
+single.draw(frame := Image.new("RGB", (128, 32), "black"), 0.5, count=1)
+check("no indicator with a single-app rotation", frame.getbbox() is None)
+gated = ProgressIndicator({"enabled": True, "show_after": 15})
+gated.draw(frame := Image.new("RGB", (128, 32), "black"), 0.5, elapsed=10, count=3)
+check("show_after gates the indicator early in the dwell", frame.getbbox() is None)
+check("arc is the default style", ProgressIndicator({}).style == "arc")
+
 print(f"\nsmoke: all {passed} checks passed")
