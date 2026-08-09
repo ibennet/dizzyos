@@ -4,7 +4,7 @@ No monitor, no keyboard, no app: browse to http://<sign>.local:8080 and press
 "show PIN" — a one-time PIN appears on the sign for 30 seconds (see
 kernel/overlay.py); type what you can read off the panels to log in. After
 that: edit config.yaml (validated before it is written), join a different WiFi
-network, see version/status.
+network, see version/status, check for a newer release and trigger the update.
 
 Threat model (see docs/adr/0002 §b): this gates against off-LAN and
 not-in-the-room access. It is NOT a boundary against a trusted peer on the same
@@ -22,6 +22,7 @@ dev (no systemd) it just tells you to restart by hand.
 
 import html
 import ipaddress
+import json
 import os
 import secrets
 import shutil
@@ -30,6 +31,8 @@ import subprocess
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
 
@@ -53,6 +56,11 @@ MAX_BODY = 256 * 1024  # refuse oversized POST bodies (Pi Zero 2 W has 512MB)
 # fixed-purpose helpers (allowed via /etc/sudoers.d) do the root-needing bits.
 WRITE_HELPER = "/opt/dizzyos/write-config"
 NMCLI_HELPER = "/opt/dizzyos/nmcli-join"
+
+# Same file tools/pi/dizzyos-update reads; tells us which repo to check for a
+# newer release. Absent in dev, where the default below applies.
+UPDATE_CONF = "/etc/dizzyos/update.conf"
+DEFAULT_REPO = "ibennet/dizzyos"
 
 _PAGE = """<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -99,6 +107,36 @@ def _host_allowed(host_header, hostname):
     return host in (hn, hn + ".local")
 
 
+def _norm_version(tag):
+    return tag[1:] if tag.startswith("v") else tag
+
+
+def _latest_release_tag():
+    """Newest published release tag for the repo this sign updates from, or
+    None before the first release has been cut. Mirrors conf()/latest_tag() in
+    tools/pi/dizzyos-update — a few lines of stdlib duplicated rather than
+    importing a root-owned script from /opt."""
+    repo = DEFAULT_REPO
+    if os.path.exists(UPDATE_CONF):
+        with open(UPDATE_CONF, encoding="utf-8") as fh:
+            for line in fh:
+                if "=" in line and not line.lstrip().startswith("#"):
+                    key, _, val = line.partition("=")
+                    if key.strip() == "REPO" and val.strip():
+                        repo = val.strip()
+    req = urllib.request.Request(
+        f"https://api.github.com/repos/{repo}/releases/latest",
+        headers={"Accept": "application/vnd.github+json",
+                 "User-Agent": "dizzyos-settings"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.load(resp)["tag_name"]
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
+
+
 def _basic_validate(cfg):
     """Minimal 'is this a dizzyos config' check — the default when the caller
     injects nothing (dev, tests). run.py passes a stricter validator that
@@ -120,7 +158,8 @@ def _basic_validate(cfg):
 
 class SettingsServer:
     def __init__(self, config_path, overlays, fonts, log, version="dev",
-                 port=8080, restart=None, validate=None):
+                 port=8080, restart=None, validate=None, fetch_latest=None,
+                 start_update=None):
         self.config_path = config_path
         self.overlays = overlays
         self.fonts = fonts
@@ -133,6 +172,13 @@ class SettingsServer:
         # Whether a candidate config is safe to write. Default is a shape check;
         # run.py injects one that walks the real load path (see validate_config).
         self.validate = validate if validate is not None else _basic_validate
+        # Update flow, both halves injectable for tests: how we learn the
+        # newest release tag, and how we kick off the install.
+        self.fetch_latest = (fetch_latest if fetch_latest is not None
+                             else _latest_release_tag)
+        self.start_update = (start_update if start_update is not None
+                             else self._default_start_update)
+        self._update_available = None  # tag from the last check, if newer
         self.hostname = socket.gethostname()
         self._pin = None            # (pin, expires_at, attempts_left)
         self._fails = 0             # failed guesses since the last success/cooldown
@@ -290,6 +336,60 @@ class SettingsServer:
                 pass
             raise
 
+    def update_available(self):
+        with self._lock:
+            return self._update_available
+
+    def check_update(self):
+        try:
+            latest = self.fetch_latest()
+        except Exception as exc:  # noqa: BLE001 — any network/API failure is
+            # a status line on the page, never a 500 from the handler thread
+            return f"update check failed: {exc}", False
+        if latest is None:
+            return "no releases published yet", True
+        if _norm_version(latest) == _norm_version(self.version):
+            with self._lock:
+                self._update_available = None
+            return f"up to date ({latest})", True
+        with self._lock:
+            self._update_available = latest
+        return f"update available: {latest} (running {self.version})", True
+
+    def run_update(self):
+        with self._lock:
+            latest = self._update_available
+        if not latest:
+            return "check for updates first", False
+        ok, error = self.start_update()
+        if not ok:
+            return f"could not start update: {error}", False
+        with self._lock:
+            self._update_available = None
+        self.log(f"settings: update to {latest} triggered via LAN settings page")
+        return (f"updating to {latest} — the sign restarts when the install "
+                "finishes; a release that fails its health check rolls back "
+                "on its own"), True
+
+    def _default_start_update(self):
+        """Kick the existing updater unit (download, symlink flip, health
+        check, rollback — see tools/pi/dizzyos-update) rather than
+        reimplementing any of it here. Returns (ok, error). --no-block because
+        the oneshot runs for minutes and ends by restarting this process."""
+        if not shutil.which("systemctl"):
+            return False, "no systemd here (dev machine?) — updating is Pi-only"
+        cmd = ["systemctl", "start", "--no-block", "dizzyos-update"]
+        if shutil.which("sudo"):
+            cmd = ["sudo", "-n"] + cmd
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True,
+                                    timeout=30)
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, str(exc)
+        if result.returncode != 0:
+            return False, result.stderr.strip() or f"exit {result.returncode}"
+        return True, ""
+
     def join_wifi(self, ssid, password):
         # SSID/password are argv, never a shell string, so there's no injection
         # surface. On the Pi go through the nmcli-join sudo helper (daemon can't
@@ -417,12 +517,25 @@ class SettingsServer:
                 with open(outer.config_path, encoding="utf-8") as fh:
                     config_text = fh.read()
                 csrf_field = f'<input type="hidden" name="csrf" value="{csrf}">'
+                update_section = (
+                    "<h2>software update</h2>"
+                    '<form method="post" action="/update/check">'
+                    + csrf_field
+                    + "<button>check for updates</button></form>")
+                pending = outer.update_available()
+                if pending:
+                    update_section += (
+                        '<form method="post" action="/update/run">'
+                        + csrf_field
+                        + f"<button>update now to {html.escape(pending)}"
+                        "</button></form>")
                 self._send(
                     status
                     + "<dl>"
                     + f"<dt>version</dt><dd>{html.escape(outer.version)}</dd>"
                     + f"<dt>config</dt><dd>{html.escape(outer.config_path)}</dd>"
                     + "</dl>"
+                    + update_section
                     + "<h2>config.yaml</h2>"
                     '<form method="post" action="/config">'
                     + csrf_field
@@ -470,6 +583,10 @@ class SettingsServer:
                 elif self.path == "/wifi":
                     outer._set_flash(token, outer.join_wifi(
                         form.get("ssid", [""])[0], form.get("password", [""])[0]))
+                elif self.path == "/update/check":
+                    outer._set_flash(token, outer.check_update())
+                elif self.path == "/update/run":
+                    outer._set_flash(token, outer.run_update())
                 self._redirect("/")
 
         return Handler
