@@ -37,7 +37,7 @@ launcher:
   transition_ms: 600
   progress:                      # dwell-progress indicator: time until the next app
     enabled: true
-    style: bar                   # bar | dots | arc
+    style: arc                   # arc | bar | dots
     position: bottom             # bar only: bottom | top
     direction: fill              # fill (elapsed) | drain (time remaining)
     thickness: 1                 # px tall, bar only

@@ -240,7 +240,8 @@ BAR = (90, 90, 110)
 launcher = Launcher(FakeMatrix(), [GoodApp(), GoodApp()],
                     {"launcher": {"default_dwell": 1, "target_fps": 4,
                                   "transition": "none",
-                                  "progress": {"enabled": True, "color": list(BAR)}}},
+                                  "progress": {"enabled": True, "style": "bar",
+                                               "color": list(BAR)}}},
                     services,
                     clock=lambda: ticks[0], sleep=lambda s: ticks.__setitem__(0, ticks[0] + s))
 ticks[0] = 0.0
@@ -262,5 +263,6 @@ check("no indicator with a single-app rotation", frame.getbbox() is None)
 gated = ProgressIndicator({"enabled": True, "show_after": 15})
 gated.draw(frame := Image.new("RGB", (128, 32), "black"), 0.5, elapsed=10, count=3)
 check("show_after gates the indicator early in the dwell", frame.getbbox() is None)
+check("arc is the default style", ProgressIndicator({}).style == "arc")
 
 print(f"\nsmoke: all {passed} checks passed")

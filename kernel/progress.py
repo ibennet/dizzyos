@@ -9,10 +9,11 @@ frame. Configured under `launcher.progress` in config.yaml; when disabled
 screen" is meaningless) draw() is a no-op.
 
 Styles:
+  arc    a tiny clock-style ring in the bottom-right corner, lit clockwise
+         (the default)
   bar    a thin strip flush along the top or bottom edge, filling across
   dots   one dot per app in the rotation, page-indicator style; the current
          app's dot brightens as its dwell elapses
-  arc    a tiny clock-style ring in the bottom-right corner, lit clockwise
 """
 
 STYLES = ("bar", "dots", "arc")
@@ -41,10 +42,10 @@ class ProgressIndicator:
         log = log or (lambda msg: None)
         self.enabled = bool(cfg.get("enabled", False))
 
-        self.style = cfg.get("style", "bar")
+        self.style = cfg.get("style", "arc")
         if self.style not in STYLES:
-            log(f"progress: unknown style {self.style!r}, using bar")
-            self.style = "bar"
+            log(f"progress: unknown style {self.style!r}, using arc")
+            self.style = "arc"
 
         self.position = cfg.get("position", "bottom")
         if self.position not in ("bottom", "top"):
