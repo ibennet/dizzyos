@@ -5,4 +5,4 @@ loop, data fetching, fonts) so that apps stay small, portable, and testable. An 
 only implements `render(t) -> PIL.Image`; the kernel does the rest.
 """
 
-__version__ = "1.0.0"  # x-release-please-version
+__version__ = "1.1.0"  # x-release-please-version

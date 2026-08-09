@@ -24,6 +24,7 @@ launcher:
     - cafe_menu
     - weather
     - subway
+    - order
   default_dwell: 10              # seconds per app when an app doesn't set its own
   target_fps: 24
   # How one app hands off to the next. Options:
@@ -60,3 +61,5 @@ apps:
     time_format: "24h"           # 12h (3:17 PM) or 24h (15:17)
   subway: {}                     # defaults come from apps/subway/manifest.yaml;
                                  # override `stops` here to follow different stations
+  order: {}                      # defaults come from apps/order/manifest.yaml;
+                                 # override `url` / `white_level` here if needed
