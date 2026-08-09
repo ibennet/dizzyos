@@ -56,15 +56,16 @@ system:
     port: 8080                   # opening it puts a one-time PIN on the sign
 
 apps:
-  cafe_menu: {}                  # defaults come from apps/cafe_menu/manifest.yaml;
-                                 # override menu_url / scroll_speed / dwell here if needed
+  cafe_menu:                     # defaults come from apps/cafe_menu/manifest.yaml;
+    dwell: 35                    # override menu_url / scroll_speed here if needed
   weather:                       # defaults come from apps/weather/manifest.yaml;
+    dwell: 10
     zipcode: "10022"             # set `zipcode` (or latitude/longitude) + location_label here
     location_label: "New York"   # explicit label wins over the ZIP's auto-derived town
     time_format: "24h"           # 12h (3:17 PM) or 24h (15:17)
-  subway: {}                     # defaults come from apps/subway/manifest.yaml;
-                                 # override `stops` here to follow different stations
-  bus: {}                        # defaults come from apps/bus/manifest.yaml;
-                                 # override `stops` there to follow different stops/routes
-  order: {}                      # defaults come from apps/order/manifest.yaml;
-                                 # override `url` / `white_level` here if needed
+  subway:                        # defaults come from apps/subway/manifest.yaml;
+    dwell: 12                    # override `stops` here to follow different stations
+  bus:                           # defaults come from apps/bus/manifest.yaml;
+    dwell: 12                    # override `stops` there to follow different stops/routes
+  order:                         # defaults come from apps/order/manifest.yaml;
+    dwell: 20                    # override `url` / `white_level` here if needed
