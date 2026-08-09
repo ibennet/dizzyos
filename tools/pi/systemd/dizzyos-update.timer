@@ -1,12 +1,15 @@
-# Nightly update check with jitter (signs shouldn't stampede GitHub at the
-# same second), catching up after downtime.
+# Frequent, cheap update poll. The updater replays the previous ETag, so an
+# unchanged /releases/latest answers with a rate-limit-free 304 — polling every
+# five minutes costs nothing, and a new release reaches signs within minutes
+# instead of overnight. The jitter keeps a fleet of signs off the same second;
+# Persistent catches up promptly after downtime.
 
 [Unit]
-Description=dizzyos nightly self-update
+Description=dizzyos self-update poll
 
 [Timer]
-OnCalendar=*-*-* 04:00:00
-RandomizedDelaySec=1h
+OnCalendar=*:0/5
+RandomizedDelaySec=90
 Persistent=true
 
 [Install]

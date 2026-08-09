@@ -92,8 +92,11 @@ Two layers with two lifecycles:
 - **Platform** — `tools/pi/bootstrap.sh`, run once on first boot: apt dependencies,
   compiles the matrix driver into `/opt/dizzyos/venv`, installs the first release, and
   enables the systemd units. Slow, compiled, rarely changes.
-- **App** — everything pure-Python, updated by `tools/pi/dizzyos-update` on a nightly
-  timer (04:00, jittered).
+- **App** — everything pure-Python, updated by `tools/pi/dizzyos-update` on a
+  five-minute timer (jittered). The poll is ETag-conditional: the updater replays
+  the previous response's ETag and GitHub answers an unchanged `/releases/latest`
+  with 304, which is free against the unauthenticated rate limit — so near-instant
+  release pickup costs no infrastructure and no auth token.
 
 The updater fetches the **auto-generated GitHub source tarball for the tag**. This is
 the deliberate part: because the app layer needs no build step, releases store **zero
@@ -120,8 +123,10 @@ rollback restores dependencies too (the venv is shared) — hence the pins are e
 GitHub over HTTPS and pins each fetch to the commit SHA the tag points at *now* (so a
 re-cut tag can't silently ship two signs different code). For a solo project on networks
 I control this is acceptable, but it means a GitHub account compromise, or a mis-push to a
-tag, deploys to every sign automatically on the nightly timer with no human in the loop —
-which is why "releases are cut by anyone but me" is a revisit trigger below.
+tag, deploys to every sign automatically within minutes with no human in the loop — the
+five-minute poll removed even the overnight delay the old nightly timer provided — which
+is why "releases are cut by anyone but me" is a revisit trigger below. The heartbeat
+rollback bounds a *broken* release; it does nothing against a malicious one that renders.
 
 ### (d) A/B root partitions are deferred, not dismissed
 
@@ -132,8 +137,8 @@ atomic, kernel and driver included, and survives a power cut mid-write.
 We're not doing it. It requires a custom partition layout, a build pipeline producing
 signed bundles, bootloader integration, and roughly doubles the SD footprint — real
 infrastructure, in exchange for atomicity over a layer (OS + compiled driver) that we
-change approximately never. The symlink flip already covers the layer that changes
-nightly, with rollback. Tracked in issue #8 for when the tradeoff shifts.
+change approximately never. The symlink flip already covers the layer that actually
+changes, with rollback. Tracked in issue #8 for when the tradeoff shifts.
 
 ## Consequences
 
