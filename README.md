@@ -10,7 +10,8 @@ Mac with **zero code changes**.
 
 Apps so far: **Cafe Menu**, which renders [Izzy's Cafe](https://izzybennett.com/izzys-cafe/)
 from the site's `/izzys-cafe.json` feed; **Weather**, current conditions from Open-Meteo;
-and **Subway**, live next-train times from the MTA's realtime feeds.
+**Subway**, live next-train times from the MTA's realtime feeds; and **Bus**, live
+next-bus times from MTA Bus Time.
 
 ---
 

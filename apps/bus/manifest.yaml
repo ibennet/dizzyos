@@ -1,0 +1,56 @@
+name: Bus
+description: Next buses at nearby stops, from the MTA Bus Time realtime feed
+# Seconds this app stays on screen per rotation.
+dwell: 20
+# Re-poll the feed this often (seconds). The countdown keeps ticking between
+# refreshes — arrival times are absolute, not "minutes at fetch time".
+refresh_interval: 30
+# Stop groups to show, one column each. Two fit comfortably on a 128px canvas.
+# Each column has up to two direction blocks; a block names its compass arrow
+# (N/S/E/W), the bus stop ids it watches, and the routes to show. Bus stop ids
+# carry no direction suffix — each curbside stop is one direction — which is why
+# a block lists explicit ids; give it several to merge a local stop with the SBS
+# box a few feet away. Look ids up in the borough GTFS stops.txt:
+# http://web.mta.info/developers/data/nyct/bus/google_transit_manhattan.zip
+# The feed spells Select Bus Service routes with a trailing "+" (M15+).
+stops:
+  - name: "2/1 Av"
+    blocks:
+      - { dir: "S", ids: ["405387", "401765"], routes: ["M15", "M15+"] }  # 2 Av/E 56 St: local + SBS
+      - { dir: "N", ids: ["401704"], routes: ["M15", "M15+"] }            # 1 Av/E 57 St
+  - name: "57 St"
+    blocks:
+      - { dir: "E", ids: ["402215"], routes: ["M31", "M57"] }             # E 57 St/3 Av, eastbound
+      - { dir: "W", ids: ["402224"], routes: ["M31", "M57"] }             # E 57 St/3 Av, westbound
+# Buses arriving sooner than this (minutes) are ignored — set it to roughly how
+# long it takes you to reach the stop. 0 shows everything, including buses
+# arriving right now.
+min_minutes: 2
+# Buses further out than this (minutes) are ignored.
+max_minutes: 30
+# Buses shown per direction, per column.
+per_direction: 2
+# Drop the borough letter from the pills ("M15+" -> "15+") — every nearby route
+# shares it, and the shorter pill leaves room for the minutes.
+short_labels: true
+# [R, G, B] fill of the per-block direction chips (the arrow is knocked out in
+# black) — first block ice blue, second warm white, matching the subway app.
+chip_first: [120, 190, 225]
+chip_second: [240, 225, 200]
+# Accent [R, G, B] band behind the column names, and the color of that text.
+# Deep teal-green, so mid-rotation the sign reads as "bus" vs the subway app's
+# lavender at a glance.
+header_band: [20, 95, 80]
+header_color: [235, 235, 235]
+# Full-width wash behind each block — darker first, lighter second, neither pure
+# black. See the subway manifest for why values under ~20 vanish on the panel.
+band_first: [22, 22, 23]
+band_second: [48, 48, 50]
+# MTA Bus Time GTFS-realtime trip updates: one citywide feed (about 1 MB).
+# It currently answers without a key; set `api_key` if that changes (free at
+# https://bustime.mta.info/wiki/Developers/Index).
+feed_url: "https://gtfsrt.prod.obanyc.com/tripUpdates"
+api_key: ""
+# Seconds a fetched feed is reused before re-fetching. Keep at or below
+# refresh_interval; on a failed fetch the last good feed keeps showing.
+feed_ttl: 30
