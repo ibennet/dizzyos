@@ -1,8 +1,8 @@
 """Subway app — next trains at a handful of nearby stations.
 
 Live arrivals straight from the MTA's GTFS-realtime feeds (keyless, no middleman).
-The feeds are protobuf, so this app carries a small reader for the four fields we
-need — see `apps/subway/gtfs.py`.
+The feeds are protobuf, decoded by the kernel's small shared reader — see
+`kernel/gtfs.py`.
 
 One column per stop, each split into a southbound (↓) and northbound (↑) block,
 showing the next couple of trains as an MTA line bullet in the line's official color
@@ -16,7 +16,7 @@ from PIL import ImageDraw
 
 from kernel.app import App
 
-from apps.subway.gtfs import iter_arrivals, looks_like_feed
+from kernel.gtfs import iter_arrivals, looks_like_feed
 
 # The MTA splits realtime data across feeds by trunk line; only the feeds the
 # configured stops actually need get fetched.
