@@ -15,6 +15,6 @@ ExecStart=/opt/dizzyos/current/tools/pi/dizzyos-update
 # A deploy is download + pip install + font-cache warm + a 90s health wait, well
 # past the 90s default that would SIGTERM us mid-flip before rollback can run.
 TimeoutStartSec=30min
-# The nightly run competes with the render loop; keep it off the critical path.
+# An update run competes with the render loop; keep it off the critical path.
 Nice=10
 IOSchedulingClass=idle
