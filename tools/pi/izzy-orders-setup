@@ -1,0 +1,86 @@
+#!/bin/bash
+# Installs Izzy's Cafe order server + Cloudflare tunnel. Run (as root) by
+# bootstrap.sh, and only when the flash-time payload contains order-server/
+# (staged by tools/flash.sh --order-server) — directory presence IS the
+# opt-in flag. Idempotent: a bootstrap retry or re-bootstrap re-runs it safely.
+#
+# Layout it produces:
+#   /opt/izzy-orders/repo   blobless sparse clone of the site repo (order-server/ only)
+#   /opt/izzy-orders/venv   its own venv — separate from /opt/dizzyos/venv on
+#                           purpose (different repo, different pin philosophy)
+#   /etc/cloudflared/       tunnel credentials + config, root-only
+#   /etc/dizzyos/order-server.conf  ORDER_REPO/ORDER_BRANCH for the updater
+
+set -euo pipefail
+
+PAYLOAD=/opt/dizzyos/payload
+OS_DIR=$PAYLOAD/order-server
+ROOT=/opt/izzy-orders
+REPO_DIR=$ROOT/repo
+
+[ -d "$OS_DIR" ] || { echo "izzy-orders-setup: no $OS_DIR payload; nothing to do"; exit 0; }
+
+# shellcheck source=/dev/null  # ORDER_REPO / ORDER_BRANCH, written by flash.sh
+. "$OS_DIR/order-server.conf"
+
+# --- dedicated system user: deterministic regardless of the flash-time login
+# user, and the public-facing app never runs as root.
+id izzy >/dev/null 2>&1 || \
+  useradd --system --create-home --home-dir "$ROOT" --shell /usr/sbin/nologin izzy
+install -d -o izzy -g izzy "$ROOT"
+
+# --- cloudflared: official apt repo, with a GitHub .deb fallback for OS
+# codenames Cloudflare hasn't published yet (Trixie lagged for months).
+if ! command -v cloudflared >/dev/null 2>&1; then
+  codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+  if curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg \
+       -o /usr/share/keyrings/cloudflare-main.gpg \
+     && echo "deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared $codename main" \
+       > /etc/apt/sources.list.d/cloudflared.list \
+     && apt-get update && apt-get install -y --no-install-recommends cloudflared; then
+    echo "izzy-orders-setup: cloudflared installed from pkg.cloudflare.com"
+  else
+    echo "izzy-orders-setup: apt repo failed for '$codename'; falling back to GitHub .deb"
+    rm -f /etc/apt/sources.list.d/cloudflared.list
+    curl -fL -o /tmp/cloudflared.deb \
+      https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64.deb
+    dpkg -i /tmp/cloudflared.deb
+    rm -f /tmp/cloudflared.deb
+  fi
+fi
+
+# --- tunnel secrets: one copy on the rootfs, root-only. The payload JSON is
+# deleted below (same lifecycle as the WiFi PSK: it exists in the clear only
+# until it has done its job).
+install -d -m 755 /etc/cloudflared
+install -m 600 "$OS_DIR"/*.json /etc/cloudflared/
+install -m 600 "$OS_DIR/config.yml" /etc/cloudflared/config.yml
+rm -f "$OS_DIR"/*.json
+
+# --- blobless sparse clone: only order-server/ blobs ever download (the site
+# repo carries heavy images), yet the clone is NOT shallow, so the updater's
+# plain `fetch` + `reset --hard` works forever with no --depth bookkeeping.
+if [ ! -d "$REPO_DIR/.git" ]; then
+  runuser -u izzy -- git clone --filter=blob:none --no-checkout --single-branch \
+    --branch "$ORDER_BRANCH" "https://github.com/$ORDER_REPO" "$REPO_DIR"
+  runuser -u izzy -- git -C "$REPO_DIR" sparse-checkout set order-server
+  runuser -u izzy -- git -C "$REPO_DIR" checkout "$ORDER_BRANCH"
+fi
+
+# --- venv outside the repo (git never touches it), owned by izzy
+[ -d "$ROOT/venv" ] || runuser -u izzy -- python3 -m venv "$ROOT/venv"
+runuser -u izzy -- "$ROOT/venv/bin/pip" install -q \
+  -r "$REPO_DIR/order-server/requirements.txt"
+
+# --- persist repo/branch for the updater (mirrors /etc/dizzyos/update.conf)
+printf 'ORDER_REPO=%s\nORDER_BRANCH=%s\n' "$ORDER_REPO" "$ORDER_BRANCH" \
+  > /etc/dizzyos/order-server.conf
+
+# --- units + enable
+cp "$PAYLOAD/izzy-orders.service" "$PAYLOAD/izzy-tunnel.service" \
+   "$PAYLOAD/izzy-orders-update.service" "$PAYLOAD/izzy-orders-update.timer" \
+   /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now izzy-orders izzy-tunnel izzy-orders-update.timer
+
+echo "izzy-orders-setup: done"

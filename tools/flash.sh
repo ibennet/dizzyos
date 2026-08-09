@@ -4,6 +4,8 @@
 #
 #   tools/flash.sh                        # interactive: picks disk, asks for WiFi
 #   tools/flash.sh --device disk6 --ssid Home --hostname lobby-sign
+#   tools/flash.sh --order-server --tunnel-cred ~/.cloudflared/<uuid>.json \
+#                  --tunnel-config config.yml   # + Izzy's Cafe order server
 #
 # What it does:
 #   1. Downloads (and caches + SHA256-verifies) the latest Raspberry Pi OS
@@ -42,8 +44,13 @@ REF=""                   # --ref <branch>: install that branch instead of the
                          # latest release — for testing unmerged work on hardware
 FORCE=0                  # --force: override the SD-shape / Mac-disk guardrails
 MAX_SD_GB=512            # bigger than this isn't an SD card; --force to override
+ORDER_SERVER=0           # --order-server: also install Izzy's Cafe order server
+TUNNEL_CRED=""           # --tunnel-cred <path>: cloudflared tunnel credentials JSON
+TUNNEL_CONFIG=""         # --tunnel-config <path>: cloudflared config.yml
+ORDER_REPO="ibennet/izzybennett.com"
+ORDER_BRANCH="master"
 
-usage() { sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -58,6 +65,11 @@ while [ $# -gt 0 ]; do
     --image)     IMAGE_FILE="$2"; shift 2 ;;
     --repo)      REPO="$2"; shift 2 ;;
     --ref)       REF="$2"; shift 2 ;;
+    --order-server)  ORDER_SERVER=1; shift ;;
+    --tunnel-cred)   TUNNEL_CRED="$2"; shift 2 ;;
+    --tunnel-config) TUNNEL_CONFIG="$2"; shift 2 ;;
+    --order-repo)    ORDER_REPO="$2"; shift 2 ;;
+    --order-branch)  ORDER_BRANCH="$2"; shift 2 ;;
     --force)     FORCE=1; shift ;;
     -h|--help)   usage ;;
     *) echo "unknown option: $1" >&2; usage 1 ;;
@@ -75,6 +87,26 @@ command -v python3 >/dev/null || die "python3 is required (used for safe templat
 # a real DNS label before it ends up in three different config files.
 [[ "$PI_HOSTNAME" =~ ^[a-zA-Z0-9][a-zA-Z0-9-]{0,62}$ ]] \
   || die "hostname must be 1-63 chars of letters, digits, hyphens (no spaces/dots)"
+
+# --- order server (opt-in): validate everything before any disk is touched ---
+# One-time Mac-side prep (per tunnel, not per card):
+#   cloudflared tunnel login && cloudflared tunnel create izzy-orders
+#   cloudflared tunnel route dns izzy-orders orders.izzybennett.com
+if [ "$ORDER_SERVER" = 1 ]; then
+  [ -n "$TUNNEL_CRED" ] && [ -n "$TUNNEL_CONFIG" ] \
+    || die "--order-server needs --tunnel-cred <uuid.json> and --tunnel-config <config.yml>"
+  [ -f "$TUNNEL_CRED" ]   || die "tunnel credentials not found: $TUNNEL_CRED"
+  [ -f "$TUNNEL_CONFIG" ] || die "tunnel config not found: $TUNNEL_CONFIG"
+  python3 -m json.tool < "$TUNNEL_CRED" >/dev/null 2>&1 \
+    || die "tunnel credentials file is not valid JSON: $TUNNEL_CRED"
+  # The setup script installs the JSON under /etc/cloudflared keeping its
+  # filename; a config pointing anywhere else would start a tunnel that can't
+  # find its credentials — catch that here, not on a headless Pi.
+  grep -q 'credentials-file:[[:space:]]*/etc/cloudflared/' "$TUNNEL_CONFIG" \
+    || die "config.yml's credentials-file must point under /etc/cloudflared/ (that's where the JSON is installed, keeping its filename)"
+elif [ -n "$TUNNEL_CRED" ] || [ -n "$TUNNEL_CONFIG" ]; then
+  die "--tunnel-cred/--tunnel-config only make sense with --order-server"
+fi
 
 # ----------------------------------------------------------------------------
 # gather inputs up front so the flash itself runs unattended
@@ -311,9 +343,23 @@ chmod +x "$BOOT/firstrun.sh"
 
 mkdir -p "$BOOT/dizzyos"
 cp "$HERE/pi/bootstrap.sh" "$HERE/pi/dizzyos-update" \
-   "$HERE/pi/write-config" "$HERE/pi/nmcli-join" "$BOOT/dizzyos/"
+   "$HERE/pi/write-config" "$HERE/pi/nmcli-join" \
+   "$HERE/pi/izzy-orders-setup" "$HERE/pi/izzy-orders-update" "$BOOT/dizzyos/"
 cp "$HERE"/pi/systemd/*.service "$HERE"/pi/systemd/*.timer "$BOOT/dizzyos/"
 cp "$HERE/pi/sudoers.d/020-dizzyos-settings" "$BOOT/dizzyos/"
+
+# order-server payload: the subdirectory's presence is what tells bootstrap to
+# install it. The tunnel credential rides the FAT partition (no permissions)
+# until firstrun moves it to the rootfs — same lifecycle as the WiFi PSK, and
+# the same caveat: treat the flashed card as carrying a live secret.
+if [ "$ORDER_SERVER" = 1 ]; then
+  note "staging order-server payload (card carries the tunnel credential until first boot)"
+  mkdir -p "$BOOT/dizzyos/order-server"
+  cp "$TUNNEL_CRED" "$BOOT/dizzyos/order-server/"     # keep <uuid>.json filename
+  cp "$TUNNEL_CONFIG" "$BOOT/dizzyos/order-server/config.yml"
+  printf 'ORDER_REPO=%s\nORDER_BRANCH=%s\n' "$ORDER_REPO" "$ORDER_BRANCH" \
+    > "$BOOT/dizzyos/order-server/order-server.conf"
+fi
 
 # ----------------------------------------------------------------------------
 note "ejecting"
@@ -328,3 +374,11 @@ done. next steps:
   3. the sign starts on its own; settings UI: http://$PI_HOSTNAME.local:8080
      ssh: ssh $PI_USER@$PI_HOSTNAME.local
 EOF
+if [ "$ORDER_SERVER" = 1 ]; then
+  cat <<EOF
+  4. the order server installs alongside dizzyos and self-updates every 5 min;
+     once bootstrap finishes it is live at the tunnel hostname in your
+     config.yml (make sure you ran, once:
+       cloudflared tunnel route dns <tunnel> orders.izzybennett.com)
+EOF
+fi

@@ -1,0 +1,64 @@
+#!/bin/bash
+# Order-server self-updater, fired every five minutes by
+# izzy-orders-update.timer. The no-change path — almost every run — is a
+# single `git ls-remote` (one small HTTPS request), the git analog of the
+# dizzyos updater's ETag-conditional poll. On a new commit: fetch, hard-reset
+# the sparse worktree, reinstall requirements only if requirements.txt
+# changed, restart the service, health-check it, and reset back to the
+# previous commit if the server won't answer.
+#
+# orders.db is untracked and lives inside the worktree next to main.py, so
+# `git reset --hard` never touches it.
+#
+# The IZZY_* environment overrides exist for dev/smoke_izzy_update.sh, which
+# exercises this script on a Mac against a local bare repo — no Pi, no
+# systemd, no izzy user.
+
+set -euo pipefail
+
+ROOT=${IZZY_ROOT:-/opt/izzy-orders}
+REPO_DIR=$ROOT/repo
+CONF=${IZZY_CONF:-/etc/dizzyos/order-server.conf}
+SYSTEMCTL=${IZZY_SYSTEMCTL:-systemctl}
+RUNUSER=${IZZY_RUNUSER:-"runuser -u izzy --"}
+HEALTH_URL=${IZZY_HEALTH_URL:-http://127.0.0.1:8000/health}
+
+# shellcheck source=/dev/null  # ORDER_REPO / ORDER_BRANCH
+. "$CONF"
+
+# $RUNUSER is deliberately word-split: it is a command prefix.
+# shellcheck disable=SC2086
+g() { $RUNUSER git -C "$REPO_DIR" "$@"; }
+# shellcheck disable=SC2086
+pip_install() { $RUNUSER "$ROOT/venv/bin/pip" install -q -r "$REPO_DIR/order-server/requirements.txt"; }
+
+remote=$(g ls-remote origin "refs/heads/$ORDER_BRANCH" | awk '{print $1}')
+[ -n "$remote" ] || { echo "izzy-orders-update: ls-remote returned nothing for $ORDER_BRANCH"; exit 1; }
+local_sha=$(g rev-parse HEAD)
+[ "$remote" = "$local_sha" ] && exit 0   # the cheap five-minute no-op
+
+echo "izzy-orders-update: $local_sha -> $remote"
+g fetch origin "$ORDER_BRANCH"
+old_req=$(g rev-parse "HEAD:order-server/requirements.txt" 2>/dev/null || echo none)
+g reset --hard "$remote"
+new_req=$(g rev-parse "HEAD:order-server/requirements.txt" 2>/dev/null || echo none)
+[ "$old_req" != "$new_req" ] && pip_install
+
+$SYSTEMCTL restart izzy-orders
+
+healthy() {
+  for _ in $(seq 1 30); do
+    if curl -fs --max-time 3 "$HEALTH_URL" >/dev/null 2>&1; then return 0; fi
+    sleep 2
+  done
+  return 1
+}
+
+if ! healthy; then
+  echo "izzy-orders-update: $remote not serving — rolling back to $local_sha"
+  g reset --hard "$local_sha"
+  [ "$old_req" != "$new_req" ] && pip_install
+  $SYSTEMCTL restart izzy-orders
+  exit 1
+fi
+echo "izzy-orders-update: now on $remote"

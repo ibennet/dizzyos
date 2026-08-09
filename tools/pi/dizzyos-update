@@ -326,7 +326,8 @@ def refresh_payload(release_dir):
     if not os.path.isdir(src):
         return
     payload = os.path.join(ROOT, "payload")
-    for fname in ("dizzyos-update", "bootstrap.sh", "write-config", "nmcli-join"):
+    for fname in ("dizzyos-update", "bootstrap.sh", "write-config", "nmcli-join",
+                  "izzy-orders-setup", "izzy-orders-update"):
         path = os.path.join(src, fname)
         if os.path.exists(path):
             shutil.copy2(path, payload)

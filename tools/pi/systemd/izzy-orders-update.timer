@@ -1,0 +1,16 @@
+# Frequent, cheap update poll for the order server. The updater's no-change
+# path is a single `git ls-remote` (one small HTTPS request), so a five-minute
+# cadence costs nothing, and a push to the order repo reaches the sign within
+# minutes. The jitter keeps a fleet of signs off the same second; Persistent
+# catches up promptly after downtime.
+
+[Unit]
+Description=izzy-orders self-update poll
+
+[Timer]
+OnCalendar=*:0/5
+RandomizedDelaySec=90
+Persistent=true
+
+[Install]
+WantedBy=timers.target

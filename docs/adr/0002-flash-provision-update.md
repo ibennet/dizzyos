@@ -167,3 +167,26 @@ changes, with rollback. Tracked in issue #8 for when the tradeoff shifts.
 - A settings-page peer on the LAN stops being trusted (shared flat, guest WiFi) →
   add the flash-time admin passphrase noted in (b).
 - More than a handful of signs, or signs on networks I don't control.
+- A second co-hosted service appears alongside the order server → generalize the
+  amendment below into a real "extra services" mechanism instead of a second
+  hand-rolled payload subdirectory.
+
+## Amendment (2026-08): opt-in co-hosted order server
+
+The cafe sign's Pi also hosts the order backend (a FastAPI app from
+`ibennet/izzybennett.com`, exposed via a Cloudflare Tunnel). Provisioning installs
+it only when `flash.sh --order-server` staged a `dizzyos/order-server/` payload
+subdirectory — its presence *is* the opt-in flag, and the tunnel credentials ride
+inside it, following the `network-config` lifecycle exactly: plaintext on FAT until
+first boot, `go-rwx` the moment they land on the rootfs, one final root-only copy in
+`/etc/cloudflared`, payload copy deleted.
+
+It deliberately does **not** reuse the release-tarball updater: the order server
+lives in a different repo with no release cadence, so it updates by git — a
+five-minute timer whose no-change path is a single `git ls-remote` (the git analog
+of the ETag-conditional poll above), with a `/health`-probe rollback to the previous
+commit. It runs as a dedicated `izzy` system user with its own venv under
+`/opt/izzy-orders`, so a dizzyos rollback reinstalling `requirements-pi.txt` can
+never touch the order server's dependencies, and vice versa. The trust note in (c)
+sharpens accordingly: a push to the order repo's default branch reaches the public
+internet within minutes, gated only by the health probe.

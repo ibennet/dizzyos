@@ -1,0 +1,21 @@
+# Cloudflare tunnel exposing the order server at orders.izzybennett.com.
+# Credentials + config are injected at flash time (tools/flash.sh
+# --tunnel-cred / --tunnel-config) and installed root-only under
+# /etc/cloudflared by izzy-orders-setup. Hand-written rather than
+# `cloudflared service install` so the unit's content is deterministic.
+# --no-autoupdate: cloudflared updates via apt, not by replacing itself.
+
+[Unit]
+Description=Cloudflare tunnel for Izzy's Cafe orders
+After=network-online.target izzy-orders.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared --no-autoupdate tunnel --config /etc/cloudflared/config.yml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

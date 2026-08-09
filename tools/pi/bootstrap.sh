@@ -118,6 +118,13 @@ systemctl daemon-reload
 systemctl enable --now dizzyos-update.timer
 systemctl enable --now dizzyos
 
+# --- opt-in order server (flash.sh --order-server) ---------------------------
+# Presence of the payload subdirectory is the flag; unflagged signs skip this
+# entirely. Failures bubble into the ERR trap above and retry via reboot.
+if [ -d "$PAYLOAD/order-server" ]; then
+  "$PAYLOAD/izzy-orders-setup"
+fi
+
 touch /etc/dizzyos/provisioned
 systemctl disable dizzyos-bootstrap.service
 echo "dizzyos bootstrap: done"
