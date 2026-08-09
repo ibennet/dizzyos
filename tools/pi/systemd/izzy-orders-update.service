@@ -1,0 +1,19 @@
+# One order-server update check. Fired by izzy-orders-update.timer; harmless
+# to run by hand:
+#   sudo systemctl start izzy-orders-update
+
+[Unit]
+Description=izzy-orders self-update check
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Run from the current dizzyos release so updater fixes ship with normal
+# releases (bootstrap's very first setup runs the payload copy directly).
+ExecStart=/opt/dizzyos/current/tools/pi/izzy-orders-update
+# fetch + pip install + restart + health wait can exceed the 90s default.
+TimeoutStartSec=15min
+# Keep off the render loop's critical path.
+Nice=10
+IOSchedulingClass=idle

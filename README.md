@@ -112,6 +112,36 @@ Flash an SD card and the sign does the rest. No monitor, no keyboard, no SSH.
 config, your WiFi credentials + SSH key, and the first-boot payload. It refuses
 internal disks and makes you retype the device and its size before erasing anything.
 
+### Order server (optional)
+
+The sign's Pi can also host [Izzy's Cafe order server](https://github.com/ibennet/izzybennett.com/tree/master/order-server)
+(the FastAPI backend behind the QR order app), exposed publicly through a Cloudflare
+Tunnel. One-time prep on the Mac, per tunnel:
+
+```bash
+cloudflared tunnel login
+cloudflared tunnel create izzy-orders            # writes ~/.cloudflared/<uuid>.json
+cloudflared tunnel route dns izzy-orders orders.izzybennett.com
+```
+
+Write a `config.yml` (`tunnel: <uuid>`, `credentials-file: /etc/cloudflared/<uuid>.json`,
+ingress `orders.izzybennett.com → http://localhost:8000`, catch-all `http_status:404`),
+then flash with:
+
+```bash
+./tools/flash.sh --order-server \
+    --tunnel-cred ~/.cloudflared/<uuid>.json --tunnel-config config.yml
+```
+
+Bootstrap installs the server under `/opt/izzy-orders` (its own venv, its own `izzy`
+system user, uvicorn on loopback only) plus `cloudflared`, and a timer polls the order
+repo every five minutes — a cheap `git ls-remote` when nothing changed; on a new commit
+it pulls, restarts, health-checks `/health`, and rolls back if the server won't answer.
+Signs flashed without `--order-server` are completely unaffected. Note the flashed card
+carries the tunnel credential (like the WiFi PSK) until first boot moves it to the
+rootfs — treat the card as secret. If the site's deploy needs it, set the repo variable
+`PUBLIC_ORDER_API=https://orders.izzybennett.com` in the site repo's Actions settings.
+
 Use a **Pi 4 / 3B+ / Zero 2 W** — they have solid GPIO timing.
 
 ### First boot (~10 minutes, unattended)

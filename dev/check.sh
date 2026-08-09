@@ -22,6 +22,16 @@ echo "==> smoke test"
 echo "==> updater state-machine test"
 "$PYTHON" dev/smoke_update.py
 
+echo "==> shell syntax"
+bash -n tools/flash.sh tools/pi/bootstrap.sh tools/pi/firstrun.sh.tmpl \
+  tools/pi/izzy-orders-setup tools/pi/izzy-orders-update dev/smoke_izzy_update.sh
+if command -v shellcheck >/dev/null 2>&1; then
+  shellcheck -S warning tools/pi/izzy-orders-setup tools/pi/izzy-orders-update
+fi
+
+echo "==> order-server updater test"
+bash dev/smoke_izzy_update.sh
+
 echo "==> enclosure fit checks"
 "$PYTHON" cad/test_fit.py
 

@@ -1,0 +1,30 @@
+# Izzy's Cafe order server (FastAPI + SQLite from ibennet/izzybennett.com).
+# Installed only on signs flashed with --order-server (tools/pi/izzy-orders-setup).
+# Binds loopback only — the public face is the Cloudflare tunnel (izzy-tunnel).
+# Runs as the dedicated `izzy` system user: the flash-time login user is
+# parameterized, and a public-facing app should never hold root.
+
+[Unit]
+Description=Izzy's Cafe order server
+After=network-online.target
+Wants=network-online.target
+# Retry forever, same reasoning as dizzyos.service: the updater's health
+# check — not systemd's start limit — decides a version is bad.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=izzy
+Group=izzy
+# orders.db lives next to main.py (untracked, so the updater's `git reset
+# --hard` never touches it); cwd matches the README's manual setup.
+WorkingDirectory=/opt/izzy-orders/repo/order-server
+# RECIPE_API (the OAuth worker for the kitchen toggle) and friends can be
+# overridden here without editing the unit; absent file is fine.
+EnvironmentFile=-/etc/dizzyos/izzy-orders.env
+ExecStart=/opt/izzy-orders/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

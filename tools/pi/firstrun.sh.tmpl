@@ -103,9 +103,18 @@ fi
 
 # --- dizzyos payload + bootstrap-on-next-boot -------------------------------
 install -d /opt/dizzyos/payload /etc/dizzyos
-cp "$BOOT"/dizzyos/* /opt/dizzyos/payload/
+# -r: the payload may contain the order-server/ subdirectory (tunnel secrets);
+# plain cp would error on it and the ERR trap would reboot-loop the Pi.
+cp -r "$BOOT"/dizzyos/* /opt/dizzyos/payload/
 chmod +x /opt/dizzyos/payload/bootstrap.sh /opt/dizzyos/payload/dizzyos-update \
-  /opt/dizzyos/payload/write-config /opt/dizzyos/payload/nmcli-join
+  /opt/dizzyos/payload/write-config /opt/dizzyos/payload/nmcli-join \
+  /opt/dizzyos/payload/izzy-orders-setup /opt/dizzyos/payload/izzy-orders-update
+# The tunnel credential just left the permissionless FAT partition — make the
+# rootfs copy root-only the moment it lands (bootstrap moves it to
+# /etc/cloudflared and deletes this copy).
+if [ -d /opt/dizzyos/payload/order-server ]; then
+  chmod -R go-rwx /opt/dizzyos/payload/order-server
+fi
 echo 'REPO={{REPO}}' > /etc/dizzyos/update.conf
 # A branch pin (flash.sh --ref) makes the updater track that branch instead
 # of releases — dev/testing only; delete the REF line to return to releases.
